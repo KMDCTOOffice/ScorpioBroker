@@ -75,13 +75,13 @@ public class ClientManager {
 	@ConfigProperty(name = "pool.initialSize")
 	int initialSize;
 
-	private String reactiveBaseUrl;
 	protected ConcurrentMap<String, Uni<PgPool>> tenant2Client = Maps.newConcurrentMap();
 
 	@PostConstruct
 	void loadTenantClients() throws URISyntaxException {
-		URI uri = new URI(reactiveDefaultUrl);
-		reactiveBaseUrl = uri.getScheme() + "://" + uri.getHost() + ":" + uri.getPort() + "/";
+		logger.info("Base jdbc url: {}", new URI(jdbcBaseUrl));
+		logger.info("Default reactive jdbc url: {}", new URI(reactiveDefaultUrl));
+
 		tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
 	}
 
@@ -101,6 +101,8 @@ public class ClientManager {
 
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
 		return determineTargetDataSource(tenant, createDB).onItem().transformToUni(Unchecked.function(finalDataBase -> {
+			String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDefaultUrl, finalDataBase);
+			logger.info("Creating pgPool for tenant '{}' with database '{}': {}", tenant, finalDataBase, databaseUrl);
 			PoolOptions options = new PoolOptions();
 			options.setName(finalDataBase);
 			options.setShared(true);
@@ -110,7 +112,7 @@ public class ClientManager {
 			options.setConnectionTimeout((int) connectionTime.getSeconds());
 			options.setConnectionTimeoutUnit(TimeUnit.SECONDS);
 
-			PgPool pool = PgPool.pool(vertx, PgConnectOptions.fromUri(reactiveBaseUrl + finalDataBase).setUser(username)
+			PgPool pool = PgPool.pool(vertx, PgConnectOptions.fromUri(databaseUrl).setUser(username)
 					.setPassword(password).setCachePreparedStatements(true), options);
 			Uni<PgPool> result = Uni.createFrom().item(pool);
 			tenant2Client.put(tenant, result);
@@ -120,6 +122,7 @@ public class ClientManager {
 
 	public Uni<String> determineTargetDataSource(String tenantidvalue, boolean createDB) {
 		return createDataSourceForTenantId(tenantidvalue, createDB).onItem().transform(tenantDataSource -> {
+			logger.info("Running database migration for tenant '{}' on database '{}'", tenantidvalue, tenantDataSource.getItem2());
 			flywayMigrate(tenantDataSource.getItem1());
 			tenantDataSource.getItem1().close();
 			return tenantDataSource.getItem2();
@@ -130,19 +133,21 @@ public class ClientManager {
 		return findDataBaseNameByTenantId(tenantidvalue, createDB).onItem()
 				.transform(Unchecked.function(tenantDatabaseName -> {
 					// TODO this needs to be from the config not hardcoded!!!
-					String tenantJdbcURL = DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
+					String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
+					logger.info("Creating datasource for tenant '{}' with jdbc url: {}", tenantidvalue, tenantJdbcURL);
+
 					AgroalDataSourceConfigurationSupplier configuration = new AgroalDataSourceConfigurationSupplier()
 							.dataSourceImplementation(DataSourceImplementation.AGROAL).metricsEnabled(false)
 							.connectionPoolConfiguration(
 									cp -> cp.minSize(minsize).maxSize(maxsize).initialSize(initialSize)
 											.connectionFactoryConfiguration(cf -> cf.jdbcUrl(tenantJdbcURL)
-													.connectionProviderClassName(jdbcDriver).autoCommit(false)
+													.connectionProviderClassName(jdbcDriver)
+													.autoCommit(false)
 													.principal(new NamePrincipal(username))
 													.credential(new SimplePassword(password))));
 					AgroalDataSource agroaldataSource = AgroalDataSource.from(configuration);
 					return Tuple2.of(agroaldataSource, tenantDatabaseName);
 				}));
-
 	}
 
 	public ConcurrentMap<String, Uni<PgPool>> getAllClients() {
@@ -183,8 +188,7 @@ public class ClientManager {
 				.execute(Tuple.of(tenantidvalue, databasename)).onItem().ignore().andContinueWithNull();
 	}
 
-	public Boolean flywayMigrate(DataSource tenantDataSource) {
-
+	public boolean flywayMigrate(DataSource tenantDataSource) {
         FlywayContainerProducer flywayProducer = Arc.container().instance(FlywayContainerProducer.class).get();
         FlywayContainer flywayContainer = flywayProducer.createFlyway(tenantDataSource, "<default>", true, true);
         Flyway flyway = flywayContainer.getFlyway();
@@ -199,9 +203,7 @@ public class ClientManager {
 				logger.error("repair failed", e);
 				return false;
 			}
-
 		}
-
 		return true;
 	}
 
