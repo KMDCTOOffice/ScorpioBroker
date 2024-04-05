@@ -142,10 +142,14 @@ public class ClientManager {
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
 
 		PgPool pool = PgPool.pool(vertx, connectOptions, poolOptions);
+		testPgPool(pool, poolName);
+		return pool;
+	}
+
+	private void testPgPool(PgPool pool, String poolName) {
 		pool.query("SELECT 1").execute().invoke(r -> {
 			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		});
-		return pool;
+		}).await().atMost(Duration.ofSeconds(1));
 	}
 
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
