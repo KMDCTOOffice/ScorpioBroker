@@ -2,6 +2,7 @@ package eu.neclab.ngsildbroker.commons.storage;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -104,7 +105,6 @@ public class ClientManager {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-
 			createAllTenantConnections(pgClient);
 		} catch (Exception e) {
 			logger.error("Error connectiong to database: ", reactiveDsDefaultUrl, e);
@@ -121,7 +121,25 @@ public class ClientManager {
 		pool.query("SELECT tennant_id, database_name FROM public.tenant").execute().onItem().invoke(r -> {
 			r.forEach(tr -> {
 				String tenant = tr.getString("tennant_id");
-				getClient(tenant, false).onItem().invoke(p -> testPgPool(pool, tenant));
+				String dbName = tr.getString("database_name");
+				String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
+				AgroalDataSource clientDatasource;
+				try {
+					logger.info("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
+					clientDatasource = createDatasource(tenant, dbName);
+					flywayMigrate(clientDatasource, tenant);
+					clientDatasource.close();
+					logger.info("Database migration for tenant '{}' finished", tenant);
+				} catch (SQLException e) {
+					// TODO Auto-generated catch block
+					logger.error("Database migration for tenant '{}' error: {}", tenant, e);
+					e.printStackTrace();
+				}
+
+				String poolName = getClientPoolName(tenant);
+				PgPool clientPool = createPgPool(poolName, databaseUrl);
+				testPgPool(clientPool, poolName);
+				tenant2Client.put(tenant, Uni.createFrom().item(clientPool));
 			});
 		});
 	}
@@ -160,13 +178,13 @@ public class ClientManager {
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		// pool.query("SELECT 1").execute().onItem().invoke(r -> {
-		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		// });
-		pool.query("SELECT 1").execute().onItem().transform(r -> {
+		pool.query("SELECT 1").execute().onItem().invoke(r -> {
 			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-			return r.size()==1;
 		});
+		// pool.query("SELECT 1").execute().onItem().transform(r -> {
+		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
+		// 	return r.size()==1;
+		// });
 	}
 
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
@@ -191,21 +209,26 @@ public class ClientManager {
 	private Uni<Tuple2<AgroalDataSource, String>> createDataSourceForTenantId(String tenantidvalue, boolean createDB) {
 		return findDataBaseNameByTenantId(tenantidvalue, createDB).onItem()
 				.transform(Unchecked.function(tenantDatabaseName -> {
-					// TODO this needs to be from the config not hardcoded!!!
-					String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
-					logger.info("Creating datasource for tenant '{}' with jdbc url: {}", tenantidvalue, tenantJdbcURL);
-					AgroalDataSourceConfigurationSupplier configuration = new AgroalDataSourceConfigurationSupplier()
-							.dataSourceImplementation(DataSourceImplementation.AGROAL).metricsEnabled(false)
-							.connectionPoolConfiguration(
-									cp -> cp.minSize(minsize).maxSize(maxsize).initialSize(initialSize)
-											.connectionFactoryConfiguration(cf -> cf.jdbcUrl(tenantJdbcURL)
-													.connectionProviderClassName(jdbcDriver)
-													.autoCommit(false)
-													.principal(new NamePrincipal(username))
-													.credential(new SimplePassword(password))));
-					AgroalDataSource agroaldataSource = AgroalDataSource.from(configuration);
+					AgroalDataSource agroaldataSource = createDatasource(tenantidvalue, tenantDatabaseName);
 					return Tuple2.of(agroaldataSource, tenantDatabaseName);
 				}));
+	}
+
+
+	private AgroalDataSource createDatasource(String tenant, String tenantDatabaseName) throws SQLException {
+		// TODO this needs to be from the config not hardcoded!!!
+		String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
+		logger.info("Creating datasource for tenant '{}' with jdbc url: {}", tenant, tenantJdbcURL);
+		AgroalDataSourceConfigurationSupplier configuration = new AgroalDataSourceConfigurationSupplier()
+				.dataSourceImplementation(DataSourceImplementation.AGROAL).metricsEnabled(false)
+				.connectionPoolConfiguration(
+						cp -> cp.minSize(minsize).maxSize(maxsize).initialSize(initialSize)
+								.connectionFactoryConfiguration(cf -> cf.jdbcUrl(tenantJdbcURL)
+										.connectionProviderClassName(jdbcDriver)
+										.autoCommit(false)
+										.principal(new NamePrincipal(username))
+										.credential(new SimplePassword(password))));
+		return AgroalDataSource.from(configuration);
 	}
 
 	public ConcurrentMap<String, Uni<PgPool>> getAllClients() {
