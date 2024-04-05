@@ -147,9 +147,10 @@ public class ClientManager {
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		pool.query("SELECT 1").execute().invoke(r -> {
+		pool.query("SELECT 1").execute().onItem().transform(r -> {
 			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		}).await().atMost(Duration.ofSeconds(1));
+			return r.size();
+		});
 	}
 
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
