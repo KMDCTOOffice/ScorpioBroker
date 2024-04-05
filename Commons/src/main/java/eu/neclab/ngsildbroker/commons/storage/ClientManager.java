@@ -178,9 +178,14 @@ public class ClientManager {
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		pool.query("SELECT 1").execute().onItem().invoke(r -> {
-			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		});
+		int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(1)).rowCount();
+		logger.info("Reactive datasource pool {} test query {}", poolName, cnt==1?"OK":"ERROR");
+		// (r -> {
+		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
+		// });
+		// pool.query("SELECT 1").execute().onItem().invoke(r -> {
+		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
+		// });
 		// pool.query("SELECT 1").execute().onItem().transform(r -> {
 		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
 		// 	return r.size()==1;
