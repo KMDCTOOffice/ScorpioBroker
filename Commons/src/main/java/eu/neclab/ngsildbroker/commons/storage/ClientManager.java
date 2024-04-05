@@ -142,8 +142,9 @@ public class ClientManager {
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
 
 		PgPool pool = PgPool.pool(vertx, connectOptions, poolOptions);
-		int rows = pool.query("SELECT 1").execute().await().atMost(connectionTime).size();
-		logger.info("Reactive datasource pool {} test query {}", poolName, rows==1?"OK":"ERROR");
+		pool.query("SELECT 1").execute().invoke(r -> {
+			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
+		});
 		return pool;
 	}
 
