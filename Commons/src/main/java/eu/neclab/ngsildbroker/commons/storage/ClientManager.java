@@ -163,6 +163,7 @@ public class ClientManager {
 		PgConnectOptions connectOptions = PgConnectOptions.fromUri(databaseUrl)
 			.setUser(username)
 			.setPassword(password)
+			.setPipeliningLimit(100)
 			.setCachePreparedStatements(reactiveDsCachePreparedStatements)
 			.setSslMode(SslMode.valueOf(reactiveDsPostgresqlSslMode.toUpperCase()))
 			.setTrustAll(reactiveDsPostgresqlSslTrustAll);
@@ -178,7 +179,8 @@ public class ClientManager {
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(1)).rowCount();
+		// int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(1)).rowCount();
+		int cnt = pool.getDelegate().query("SELECT 1").execute().result().size();
 		logger.info("Reactive datasource pool {} test query {}", poolName, cnt==1?"OK":"ERROR");
 		// (r -> {
 		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
