@@ -102,12 +102,28 @@ public class ClientManager {
 
 		try {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
+			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
+
+			createAllTenantConnections(pgClient);
 		} catch (Exception e) {
 			logger.error("Error connectiong to database: ", reactiveDsDefaultUrl, e);
 			e.printStackTrace();
 			throw e;
 		}
+	}
+
+	private String getClientPoolName(String tenant) {
+		return "scorpio_tenant_" + tenant + "_pool";
+	}
+
+	private void createAllTenantConnections(PgPool pool) {
+		pool.query("SELECT tennant_id, database_name FROM public.tenant").execute().onItem().invoke(r -> {
+			r.forEach(tr -> {
+				String tenant = tr.getString("tennant_id");
+				getClient(tenant, false).onItem().invoke(p -> testPgPool(pool, tenant));
+			});
+		});
 	}
 
 	public Uni<PgPool> getClient(String tenant, boolean create) {
@@ -140,16 +156,12 @@ public class ClientManager {
 			.setIdleTimeoutUnit(TimeUnit.SECONDS)
 			.setConnectionTimeout((int) connectionTime.getSeconds())
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
-
-		PgPool pool = PgPool.pool(vertx, connectOptions, poolOptions);
-		testPgPool(pool, poolName);
-		return pool;
+		return PgPool.pool(vertx, connectOptions, poolOptions);
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		pool.query("SELECT 1").execute().onItem().transform(r -> {
+		pool.query("SELECT 1").execute().onItem().invoke(r -> {
 			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-			return r.size();
 		});
 	}
 
@@ -157,7 +169,7 @@ public class ClientManager {
 		return determineTargetDataSource(tenant, createDB).onItem().transformToUni(Unchecked.function(finalDataBase -> {
 			String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, finalDataBase);
 			logger.info("Creating reactive datasource pool for tenant '{}' with database '{}'", tenant, finalDataBase);
-			Uni<PgPool> result = Uni.createFrom().item(createPgPool("scorpio_tenant_" + tenant + "_pool", databaseUrl));
+			Uni<PgPool> result = Uni.createFrom().item(createPgPool(getClientPoolName(tenant), databaseUrl));
 			tenant2Client.put(tenant, result);
 			return result;
 		}));
@@ -166,7 +178,7 @@ public class ClientManager {
 	public Uni<String> determineTargetDataSource(String tenantidvalue, boolean createDB) {
 		return createDataSourceForTenantId(tenantidvalue, createDB).onItem().transform(tenantDataSource -> {
 			logger.info("Running database migration for tenant '{}' on database '{}'", tenantidvalue, tenantDataSource.getItem2());
-			flywayMigrate(tenantDataSource.getItem1());
+			flywayMigrate(tenantDataSource.getItem1(), tenantidvalue);
 			tenantDataSource.getItem1().close();
 			return tenantDataSource.getItem2();
 		});
@@ -178,7 +190,6 @@ public class ClientManager {
 					// TODO this needs to be from the config not hardcoded!!!
 					String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
 					logger.info("Creating datasource for tenant '{}' with jdbc url: {}", tenantidvalue, tenantJdbcURL);
-
 					AgroalDataSourceConfigurationSupplier configuration = new AgroalDataSourceConfigurationSupplier()
 							.dataSourceImplementation(DataSourceImplementation.AGROAL).metricsEnabled(false)
 							.connectionPoolConfiguration(
@@ -231,9 +242,9 @@ public class ClientManager {
 				.execute(Tuple.of(tenantidvalue, databasename)).onItem().ignore().andContinueWithNull();
 	}
 
-	public boolean flywayMigrate(DataSource tenantDataSource) {
+	private boolean flywayMigrate(DataSource tenantDataSource, String tenant) {
         FlywayContainerProducer flywayProducer = Arc.container().instance(FlywayContainerProducer.class).get();
-        FlywayContainer flywayContainer = flywayProducer.createFlyway(tenantDataSource, "<default>", true, true);
+        FlywayContainer flywayContainer = flywayProducer.createFlyway(tenantDataSource, "scoprpio_tenant_" + tenant + "_datasource", true, true);
         Flyway flyway = flywayContainer.getFlyway();
 		try {
 			flyway.migrate();
