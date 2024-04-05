@@ -18,6 +18,7 @@ import eu.neclab.ngsildbroker.commons.constants.AppConstants;
 import eu.neclab.ngsildbroker.commons.enums.ErrorType;
 import eu.neclab.ngsildbroker.commons.exceptions.ResponseException;
 import eu.neclab.ngsildbroker.commons.tools.DBUtil;
+import eu.neclab.ngsildbroker.commons.utils.QuarkusConfigDump;
 import io.agroal.api.AgroalDataSource;
 import io.agroal.api.configuration.AgroalDataSourceConfiguration.DataSourceImplementation;
 import io.agroal.api.configuration.supplier.AgroalDataSourceConfigurationSupplier;
@@ -33,7 +34,9 @@ import io.vertx.mutiny.core.Vertx;
 import io.vertx.mutiny.pgclient.PgPool;
 import io.vertx.mutiny.sqlclient.Tuple;
 import io.vertx.pgclient.PgConnectOptions;
+import io.vertx.pgclient.SslMode;
 import io.vertx.sqlclient.PoolOptions;
+import io.vertx.sqlclient.SqlConnection;
 
 @Singleton
 public class ClientManager {
@@ -41,6 +44,10 @@ public class ClientManager {
 	Logger logger = LoggerFactory.getLogger(ClientManager.class);
 
 	@Inject
+	QuarkusConfigDump quarkusConfigDump;
+
+	// Create own pgPool from quarkus.datasource properties
+	// @Inject
 	PgPool pgClient;
 
 	@Inject
@@ -50,7 +57,7 @@ public class ClientManager {
 	Vertx vertx;
 
 	@ConfigProperty(name = "quarkus.datasource.reactive.url")
-	String reactiveDefaultUrl;
+	String reactiveDsDefaultUrl;
 	@ConfigProperty(name = "quarkus.datasource.jdbc.url")
 	String jdbcBaseUrl;
 	@ConfigProperty(name = "quarkus.datasource.jdbc.driver")
@@ -59,6 +66,16 @@ public class ClientManager {
 	String username;
 	@ConfigProperty(name = "quarkus.datasource.password")
 	String password;
+
+	@ConfigProperty(name = "quarkus.datasource.reactive.postgresql.ssl-mode")
+	String reactiveDsPostgresqlSslMode;
+	@ConfigProperty(name = "quarkus.datasource.reactive.trust-all")
+	boolean reactiveDsPostgresqlSslTrustAll;
+
+	@ConfigProperty(name = "quarkus.datasource.reactive.shared")
+	boolean reactiveDsShared;
+	@ConfigProperty(name = "quarkus.datasource.reactive.cache-prepared-statements")
+	boolean reactiveDsCachePreparedStatements;
 
 	@ConfigProperty(name = "quarkus.datasource.reactive.max-size")
 	int reactiveMaxSize;
@@ -79,10 +96,22 @@ public class ClientManager {
 
 	@PostConstruct
 	void loadTenantClients() throws URISyntaxException {
-		logger.info("Base jdbc url: {}", new URI(jdbcBaseUrl));
-		logger.info("Default reactive jdbc url: {}", new URI(reactiveDefaultUrl));
+		logger.warn("Using custom reactive datasource Postgresql connection pool!");
 
-		tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
+		logger.info("Base jdbc url: {}", new URI(jdbcBaseUrl));
+		logger.info("Default reactive jdbc url: {}, sslmode: {}", new URI(reactiveDsDefaultUrl), reactiveDsPostgresqlSslMode);
+
+		logger.info("Creating default reactive pgPool: {}", reactiveDsDefaultUrl);
+		try {
+			pgClient = createPgPool("default_pool", reactiveDsDefaultUrl);
+			int rows = pgClient.query("SELECT 1").execute().await().atMost(connectionTime).size();
+			logger.info("Default pgPool test {}", rows==1?"OK":"ERROR");
+			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
+		} catch (Exception e) {
+			logger.error("Error connectiong to database: ", reactiveDsDefaultUrl, e);
+			e.printStackTrace();
+			throw e;
+		}
 	}
 
 	public Uni<PgPool> getClient(String tenant, boolean create) {
@@ -99,22 +128,29 @@ public class ClientManager {
 		return result;
 	}
 
+	private PgPool createPgPool(String poolName, String databaseUrl) {
+		PgConnectOptions connectOptions = PgConnectOptions.fromUri(databaseUrl)
+			.setUser(username)
+			.setPassword(password)
+			.setCachePreparedStatements(reactiveDsCachePreparedStatements)
+			.setSslMode(SslMode.valueOf(reactiveDsPostgresqlSslMode.toUpperCase()))
+			.setTrustAll(reactiveDsPostgresqlSslTrustAll);
+		PoolOptions poolOptions = new PoolOptions()
+			.setName(poolName)
+			.setShared(reactiveDsShared)
+			.setMaxSize(reactiveMaxSize)
+			.setIdleTimeout((int) idleTime.getSeconds())
+			.setIdleTimeoutUnit(TimeUnit.SECONDS)
+			.setConnectionTimeout((int) connectionTime.getSeconds())
+			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
+		return PgPool.pool(vertx, connectOptions, poolOptions);
+	}
+
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
 		return determineTargetDataSource(tenant, createDB).onItem().transformToUni(Unchecked.function(finalDataBase -> {
-			String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDefaultUrl, finalDataBase);
+			String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, finalDataBase);
 			logger.info("Creating pgPool for tenant '{}' with database '{}': {}", tenant, finalDataBase, databaseUrl);
-			PoolOptions options = new PoolOptions();
-			options.setName(finalDataBase);
-			options.setShared(true);
-			options.setMaxSize(reactiveMaxSize);
-			options.setIdleTimeout((int) idleTime.getSeconds());
-			options.setIdleTimeoutUnit(TimeUnit.SECONDS);
-			options.setConnectionTimeout((int) connectionTime.getSeconds());
-			options.setConnectionTimeoutUnit(TimeUnit.SECONDS);
-
-			PgPool pool = PgPool.pool(vertx, PgConnectOptions.fromUri(databaseUrl).setUser(username)
-					.setPassword(password).setCachePreparedStatements(true), options);
-			Uni<PgPool> result = Uni.createFrom().item(pool);
+			Uni<PgPool> result = Uni.createFrom().item(createPgPool("tenant_" + tenant + "_pool", databaseUrl));
 			tenant2Client.put(tenant, result);
 			return result;
 		}));
