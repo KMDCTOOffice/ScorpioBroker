@@ -36,7 +36,6 @@ import io.vertx.mutiny.sqlclient.Tuple;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.SslMode;
 import io.vertx.sqlclient.PoolOptions;
-import io.vertx.sqlclient.SqlConnection;
 
 @Singleton
 public class ClientManager {
@@ -101,11 +100,8 @@ public class ClientManager {
 		logger.info("Base jdbc url: {}", new URI(jdbcBaseUrl));
 		logger.info("Default reactive jdbc url: {}, sslmode: {}", new URI(reactiveDsDefaultUrl), reactiveDsPostgresqlSslMode);
 
-		logger.info("Creating default reactive pgPool: {}", reactiveDsDefaultUrl);
 		try {
-			pgClient = createPgPool("default_pool", reactiveDsDefaultUrl);
-			int rows = pgClient.query("SELECT 1").execute().await().atMost(connectionTime).size();
-			logger.info("Default pgPool test {}", rows==1?"OK":"ERROR");
+			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
 		} catch (Exception e) {
 			logger.error("Error connectiong to database: ", reactiveDsDefaultUrl, e);
@@ -129,6 +125,7 @@ public class ClientManager {
 	}
 
 	private PgPool createPgPool(String poolName, String databaseUrl) {
+		logger.info("Creating reactive datasource pool '{}'; database: {}, sslmode: {}", poolName, databaseUrl, reactiveDsPostgresqlSslMode);
 		PgConnectOptions connectOptions = PgConnectOptions.fromUri(databaseUrl)
 			.setUser(username)
 			.setPassword(password)
@@ -143,14 +140,18 @@ public class ClientManager {
 			.setIdleTimeoutUnit(TimeUnit.SECONDS)
 			.setConnectionTimeout((int) connectionTime.getSeconds())
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
-		return PgPool.pool(vertx, connectOptions, poolOptions);
+
+		PgPool pool = PgPool.pool(vertx, connectOptions, poolOptions);
+		int rows = pool.query("SELECT 1").execute().await().atMost(connectionTime).size();
+		logger.info("Reactive datasource pool {} test query {}", poolName, rows==1?"OK":"ERROR");
+		return pool;
 	}
 
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
 		return determineTargetDataSource(tenant, createDB).onItem().transformToUni(Unchecked.function(finalDataBase -> {
 			String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, finalDataBase);
-			logger.info("Creating pgPool for tenant '{}' with database '{}': {}", tenant, finalDataBase, databaseUrl);
-			Uni<PgPool> result = Uni.createFrom().item(createPgPool("tenant_" + tenant + "_pool", databaseUrl));
+			logger.info("Creating reactive datasource pool for tenant '{}' with database '{}'", tenant, finalDataBase);
+			Uni<PgPool> result = Uni.createFrom().item(createPgPool("scorpio_tenant_" + tenant + "_pool", databaseUrl));
 			tenant2Client.put(tenant, result);
 			return result;
 		}));
