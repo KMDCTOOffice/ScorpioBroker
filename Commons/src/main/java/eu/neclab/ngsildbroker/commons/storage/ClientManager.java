@@ -179,6 +179,9 @@ public class ClientManager {
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
+		pool.query("SELECT 1").execute().onItem().invoke(r -> {
+			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
+		});
 		// int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(1)).rowCount();
 		int cnt = pool.getDelegate().query("SELECT 1").execute().result().size();
 		logger.info("Reactive datasource pool {} test query {}", poolName, cnt==1?"OK":"ERROR");
