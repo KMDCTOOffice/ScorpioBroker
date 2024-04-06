@@ -104,10 +104,11 @@ public class ClientManager {
 		try {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			testPgPool(pgClient, "scorpio_default_pool");
+			// createAllTenantConnections(pgClient);
+			createAllTenantConnectionsSync();
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-			createAllTenantConnections(pgClient);
 		} catch (Exception e) {
-			logger.error("Error connectiong to database: ", reactiveDsDefaultUrl, e);
+			logger.error("Error connecting to database: ", reactiveDsDefaultUrl, e);
 			e.printStackTrace();
 			throw e;
 		}
@@ -120,14 +121,18 @@ public class ClientManager {
 	private void createAllTenantConnections(PgPool pool) {
 		pool.query("SELECT tennant_id, database_name FROM public.tenant").execute().onItem().invoke(r -> {
 			r.forEach(tr -> {
-				String tenant = tr.getString("tennant_id");
-				String dbName = tr.getString("database_name");
+				createClient(tr.getString("tennant_id"), tr.getString("database_name"));
+			});
+		});
+	}
+
+	private void createClient(String tenant, String dbName) {
 				String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
 				logger.info("Creating client for tenant '{}'", tenant);
 				AgroalDataSource clientDatasource;
 				try {
 					logger.info("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
-					clientDatasource = createDatasource(tenant, dbName);
+					clientDatasource = createDatasourceForTenant(tenant, dbName);
 					flywayMigrate(clientDatasource, tenant);
 					clientDatasource.close();
 					logger.info("Database migration for tenant '{}' finished", tenant);
@@ -137,12 +142,28 @@ public class ClientManager {
 				}
 
 				String poolName = getClientPoolName(tenant);
+				logger.info("Creating client pool '{}'' for tenant '{}'", tenant, poolName);
 				PgPool clientPool = createPgPool(poolName, databaseUrl);
 				testPgPool(clientPool, poolName);
 				tenant2Client.put(tenant, Uni.createFrom().item(clientPool));
 				logger.info("Done Creating client for tenant '{}'", tenant);
-			});
-		});
+	}
+
+	private void createAllTenantConnectionsSync() {
+
+		try(AgroalDataSource dataSource = createDatasource(jdbcBaseUrl)) {
+			var rs = dataSource.getConnection().prepareStatement("SELECT tennant_id, database_name FROM public.tenant").executeQuery();
+			rs.first();
+			while (!rs.isAfterLast()) {
+				String tenant = rs.getString("tennant_id");
+				String dbName = rs.getString("database_name");
+				createClient(tenant, dbName);
+				rs.next();
+			}
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}
 
 	public Uni<PgPool> getClient(String tenant, boolean create) {
@@ -210,21 +231,25 @@ public class ClientManager {
 	private Uni<Tuple2<AgroalDataSource, String>> createDataSourceForTenantId(String tenantidvalue, boolean createDB) {
 		return findDataBaseNameByTenantId(tenantidvalue, createDB).onItem()
 				.transform(Unchecked.function(tenantDatabaseName -> {
-					AgroalDataSource agroaldataSource = createDatasource(tenantidvalue, tenantDatabaseName);
+					AgroalDataSource agroaldataSource = createDatasourceForTenant(tenantidvalue, tenantDatabaseName);
 					return Tuple2.of(agroaldataSource, tenantDatabaseName);
 				}));
 	}
 
 
-	private AgroalDataSource createDatasource(String tenant, String tenantDatabaseName) throws SQLException {
-		// TODO this needs to be from the config not hardcoded!!!
+	private AgroalDataSource createDatasourceForTenant(String tenant, String tenantDatabaseName) throws SQLException {
 		String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
 		logger.info("Creating datasource for tenant '{}' with jdbc url: {}", tenant, tenantJdbcURL);
+		return createDatasource(tenantJdbcURL);
+	}
+
+	private AgroalDataSource createDatasource(String jdbcURL) throws SQLException {
+		// TODO this needs to be from the config not hardcoded!!!
 		AgroalDataSourceConfigurationSupplier configuration = new AgroalDataSourceConfigurationSupplier()
 				.dataSourceImplementation(DataSourceImplementation.AGROAL).metricsEnabled(false)
 				.connectionPoolConfiguration(
 						cp -> cp.minSize(minsize).maxSize(maxsize).initialSize(initialSize)
-								.connectionFactoryConfiguration(cf -> cf.jdbcUrl(tenantJdbcURL)
+								.connectionFactoryConfiguration(cf -> cf.jdbcUrl(jdbcURL)
 										.connectionProviderClassName(jdbcDriver)
 										.autoCommit(false)
 										.principal(new NamePrincipal(username))
