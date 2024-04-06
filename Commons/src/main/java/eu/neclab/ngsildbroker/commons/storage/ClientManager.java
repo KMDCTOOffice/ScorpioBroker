@@ -185,7 +185,6 @@ public class ClientManager {
 		PgConnectOptions connectOptions = PgConnectOptions.fromUri(databaseUrl)
 			.setUser(username)
 			.setPassword(password)
-			.setPipeliningLimit(100)
 			.setCachePreparedStatements(reactiveDsCachePreparedStatements)
 			.setSslMode(SslMode.valueOf(reactiveDsPostgresqlSslMode.toUpperCase()))
 			.setTrustAll(reactiveDsPostgresqlSslTrustAll);
