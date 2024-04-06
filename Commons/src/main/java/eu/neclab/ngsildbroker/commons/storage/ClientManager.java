@@ -102,8 +102,8 @@ public class ClientManager {
 		logger.info("Default reactive jdbc url: {}, sslmode: {}", new URI(reactiveDsDefaultUrl), reactiveDsPostgresqlSslMode);
 
 		try {
-			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
-			testPgPool(pgClient, "scorpio_default_pool");
+			// pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
+			// testPgPool(pgClient, "scorpio_default_pool");
 			// createAllTenantConnections(pgClient);
 			createAllTenantConnectionsSync();
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
@@ -112,6 +112,8 @@ public class ClientManager {
 			e.printStackTrace();
 			throw e;
 		}
+		pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
+		testPgPool(pgClient, "scorpio_default_pool");
 	}
 
 	private String getClientPoolName(String tenant) {
