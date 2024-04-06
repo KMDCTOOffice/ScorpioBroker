@@ -105,7 +105,7 @@ public class ClientManager {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-			// createAllTenantConnections(pgClient);
+			createAllTenantConnections(pgClient);
 		} catch (Exception e) {
 			logger.error("Error connectiong to database: ", reactiveDsDefaultUrl, e);
 			e.printStackTrace();
@@ -123,6 +123,7 @@ public class ClientManager {
 				String tenant = tr.getString("tennant_id");
 				String dbName = tr.getString("database_name");
 				String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
+				logger.info("Creating client for tenant '{}'", tenant);
 				AgroalDataSource clientDatasource;
 				try {
 					logger.info("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
@@ -131,7 +132,6 @@ public class ClientManager {
 					clientDatasource.close();
 					logger.info("Database migration for tenant '{}' finished", tenant);
 				} catch (SQLException e) {
-					// TODO Auto-generated catch block
 					logger.error("Database migration for tenant '{}' error: {}", tenant, e);
 					e.printStackTrace();
 				}
@@ -140,6 +140,7 @@ public class ClientManager {
 				PgPool clientPool = createPgPool(poolName, databaseUrl);
 				testPgPool(clientPool, poolName);
 				tenant2Client.put(tenant, Uni.createFrom().item(clientPool));
+				logger.info("Done Creating client for tenant '{}'", tenant);
 			});
 		});
 	}
