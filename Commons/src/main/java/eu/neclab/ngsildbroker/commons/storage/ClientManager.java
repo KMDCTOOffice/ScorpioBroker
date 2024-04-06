@@ -104,8 +104,8 @@ public class ClientManager {
 		try {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			testPgPool(pgClient, "scorpio_default_pool");
-			// createAllTenantConnections(pgClient);
-			createAllTenantConnectionsSync();
+			createAllTenantConnections(pgClient);
+			// createAllTenantConnectionsSync();
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
 		} catch (Exception e) {
 			logger.error("Error connecting to database: ", reactiveDsDefaultUrl, e);
