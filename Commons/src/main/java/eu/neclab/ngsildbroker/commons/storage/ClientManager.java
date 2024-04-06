@@ -105,7 +105,7 @@ public class ClientManager {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-			createAllTenantConnections(pgClient);
+			// createAllTenantConnections(pgClient);
 		} catch (Exception e) {
 			logger.error("Error connectiong to database: ", reactiveDsDefaultUrl, e);
 			e.printStackTrace();
@@ -179,22 +179,12 @@ public class ClientManager {
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		pool.query("SELECT 1").execute().onItem().invoke(r -> {
-			logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		});
-		// int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(1)).rowCount();
-		// int cnt = pool.getDelegate().query("SELECT 1").execute().result().size();
-		// logger.info("Reactive datasource pool {} test query {}", poolName, cnt==1?"OK":"ERROR");
-		// (r -> {
-		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		// });
+		logger.info("Reactive datasource pool {} test query: SELECT 1", poolName);
 		// pool.query("SELECT 1").execute().onItem().invoke(r -> {
 		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
 		// });
-		// pool.query("SELECT 1").execute().onItem().transform(r -> {
-		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		// 	return r.size()==1;
-		// });
+		int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(5)).rowCount();
+		logger.info("Reactive datasource pool {} test query {}", poolName, cnt==1?"OK":"ERROR");
 	}
 
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
