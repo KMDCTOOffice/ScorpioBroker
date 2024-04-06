@@ -197,7 +197,8 @@ public class ClientManager {
 			.setIdleTimeoutUnit(TimeUnit.SECONDS)
 			.setConnectionTimeout((int) connectionTime.getSeconds())
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
-		return PgPool.pool(vertx, connectOptions, poolOptions);
+		// return PgPool.pool(vertx, connectOptions, poolOptions);
+		return PgPool.pool(connectOptions, poolOptions);
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
