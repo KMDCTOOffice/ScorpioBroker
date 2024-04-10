@@ -142,7 +142,7 @@ public class ClientManager {
 		}
 
 		String poolName = getClientPoolName(tenant);
-		logger.info("Creating client pool '{}'' for tenant '{}'", tenant, poolName);
+		logger.info("Creating client pool '{}' for tenant '{}'", poolName, tenant);
 		PgPool clientPool = createPgPool(poolName, databaseUrl);
 		testPgPool(clientPool, poolName);
 		tenant2Client.put(tenant, Uni.createFrom().item(clientPool));
@@ -155,13 +155,11 @@ public class ClientManager {
 			var rs = statement.executeQuery();
 			rs.next();
 			while (!rs.isAfterLast()) {
-				String tenant = rs.getString("tenant_id");
-				String dbName = rs.getString("database_name");
-				createClient(tenant, dbName);
+				createClient(rs.getString("tenant_id"), rs.getString("database_name"));
 				rs.next();
 			}
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
+			logger.error("Tenand database names access error: {}", e.getMessage(), e);
 			e.printStackTrace();
 		}
 	}
@@ -170,14 +168,11 @@ public class ClientManager {
 		if (tenant == null) {
 			return tenant2Client.get(AppConstants.INTERNAL_NULL_KEY);
 		}
-		Uni<PgPool> result = tenant2Client.get(tenant);
-		if (result == null) {
-			result = getTenant(tenant, create);
-			return result.onItem().transformToUni(pgClient->{
-                return tenant2Client.put(tenant, Uni.createFrom().item(pgClient));
-			});
-		}
-		return result;
+		return tenant2Client.computeIfAbsent(tenant, t -> {
+				logger.info("get tenant client (pg pool): {}", t);
+				return createTenantClient(t, create);//.onItem().transformToUni(c -> Uni.createFrom().item(c));
+			}
+		);
 	}
 
 	private PgPool createPgPool(String poolName, String databaseUrl) {
@@ -200,17 +195,16 @@ public class ClientManager {
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		logger.info("Reactive datasource pool {} test: ", pool);
 		int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(5)).rowCount();
 		logger.info("Reactive datasource pool {} test query {} ({})", poolName, cnt==1?"OK":"ERROR", pool);
 	}
 
-	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
+	private Uni<PgPool> createTenantClient(String tenant, boolean createDB) {
 		return determineTargetDataSource(tenant, createDB).onItem().transformToUni(Unchecked.function(finalDataBase -> {
 			String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, finalDataBase);
 			logger.info("Creating reactive datasource pool for tenant '{}' with database '{}'", tenant, finalDataBase);
 			Uni<PgPool> result = Uni.createFrom().item(createPgPool(getClientPoolName(tenant), databaseUrl));
-			tenant2Client.put(tenant, result);
+			// tenant2Client.put(tenant, result);
 			return result;
 		}));
 	}
