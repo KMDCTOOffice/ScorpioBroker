@@ -105,8 +105,8 @@ public class ClientManager {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-			createAllTenantConnectionsSync();
-		} catch (Exception e) {
+			// createAllTenantConnectionsSync();
+		} catch (RuntimeException e) {
 			logger.error("Error connecting to database: {}", reactiveDsDefaultUrl, e);
 			e.printStackTrace();
 			throw e;
@@ -117,14 +117,14 @@ public class ClientManager {
 		return "scorpio_tenant_" + tenant + "_pool";
 	}
 
-	private void createAllTenantConnections(PgPool pool) {
-		pool.query("SELECT tennant_id, database_name FROM public.tenant").execute().onItem().invoke(r -> {
-			r.forEach(tr -> {
-				logger.info("Tennant table entry; id: {}, datanase: {}", tr.getString("tenant_id"), tr.getString("database_name"));
-				createClient(tr.getString("tennant_id"), tr.getString("database_name"));
-			});
-		});
-	}
+	// private void createAllTenantConnections(PgPool pool) {
+	// 	pool.query("SELECT tennant_id, database_name FROM public.tenant").execute().onItem().invoke(r -> {
+	// 		r.forEach(tr -> {
+	// 			logger.info("Tenant table entry; id: {}, database: {}", tr.getString("tenant_id"), tr.getString("database_name"));
+	// 			createClient(tr.getString("tennant_id"), tr.getString("database_name"));
+	// 		});
+	// 	});
+	// }
 
 	private void createClient(String tenant, String dbName) {
 		String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
@@ -143,10 +143,10 @@ public class ClientManager {
 
 		String poolName = getClientPoolName(tenant);
 		logger.info("Creating client pool '{}' for tenant '{}'", poolName, tenant);
-		PgPool clientPool = createPgPool(poolName, databaseUrl);
-		testPgPool(clientPool, poolName);
-		tenant2Client.put(tenant, Uni.createFrom().item(clientPool));
-		logger.info("Done Creating client for tenant '{}'", tenant);
+		PgPool pool = createPgPool(poolName, databaseUrl);
+		testPgPool(pool, poolName);
+		tenant2Client.put(tenant, Uni.createFrom().item(pool));
+		logger.info("Done creating client for tenant '{}'", tenant);
 	}
 
 	private void createAllTenantConnectionsSync() {
@@ -155,7 +155,9 @@ public class ClientManager {
 			var rs = statement.executeQuery();
 			rs.next();
 			while (!rs.isAfterLast()) {
-				createClient(rs.getString("tenant_id"), rs.getString("database_name"));
+				String tenant = rs.getString("tenant_id");
+				logger.info("----------- Tenant {} -----------", tenant);
+				createClient(tenant, rs.getString("database_name"));
 				rs.next();
 			}
 		} catch (SQLException e) {
