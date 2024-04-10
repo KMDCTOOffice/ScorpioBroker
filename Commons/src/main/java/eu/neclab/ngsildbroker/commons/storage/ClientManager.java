@@ -105,7 +105,7 @@ public class ClientManager {
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
 			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-			// createAllTenantConnectionsSync();
+			createAllTenantConnectionsSync();
 		} catch (RuntimeException e) {
 			logger.error("Error connecting to database: {}", reactiveDsDefaultUrl, e);
 			e.printStackTrace();
@@ -171,7 +171,6 @@ public class ClientManager {
 			return tenant2Client.get(AppConstants.INTERNAL_NULL_KEY);
 		}
 		return tenant2Client.computeIfAbsent(tenant, t -> {
-				logger.info("get tenant client (pg pool): {}", t);
 				return createTenantClient(t, create);//.onItem().transformToUni(c -> Uni.createFrom().item(c));
 			}
 		);
