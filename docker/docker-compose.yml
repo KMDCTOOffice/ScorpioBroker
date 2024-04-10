@@ -1,0 +1,60 @@
+version: '3'
+
+services:
+  zookeeper:
+    image: zookeeper
+    ports:
+      - "2181"
+    logging:
+      driver: none
+  kafka:
+    image: bitnami/kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_PORT: 9092
+      KAFKA_LOG_RETENTION_MS: 10000
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 5000
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - zookeeper
+    logging:
+      driver: none
+  postgres:
+    # image: postgis/postgis
+    image: pgsql-ssl
+    command: -c ssl=on -c ssl_cert_file=/var/lib/postgresql/server.crt -c ssl_key_file=/var/lib/postgresql/server.key
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ngb
+      POSTGRES_PASSWORD: ngb
+      POSTGRES_DB: ngb
+      FORCE_SSL: "true"
+    logging:
+      driver: none
+    volumes:
+      # - ./ssl/server.crt:/var/lib/postgresql/server.crt:ro
+      # - ./ssl/server.key:/var/lib/postgresql/server.key:ro
+     - pg_data:/var/lib/postgresql/data
+  # scorpio:
+  #   # image: scorpiobroker/all-in-one-runner:spring-kafka-latest
+  #   image: scorpiobroker:4.1.15-pgsql-ssl
+  #   ports:
+  #     - "19090:9090"
+  #   depends_on:
+  #     - postgres
+  #     - kafka
+  #   environment:
+  #     DBHOST: postgres
+  #     DBUSER: ngb
+  #     DBPASS: ngb
+  #     DBSSLMODE: require
+  #     BUSHOST: kafka
+
+volumes:
+  pg_data:

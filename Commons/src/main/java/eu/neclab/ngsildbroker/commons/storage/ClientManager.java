@@ -102,18 +102,15 @@ public class ClientManager {
 		logger.info("Default reactive jdbc url: {}, sslmode: {}", new URI(reactiveDsDefaultUrl), reactiveDsPostgresqlSslMode);
 
 		try {
-			// pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
-			// testPgPool(pgClient, "scorpio_default_pool");
-			// createAllTenantConnections(pgClient);
-			createAllTenantConnectionsSync();
+			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
+			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
+			createAllTenantConnectionsSync();
 		} catch (Exception e) {
-			logger.error("Error connecting to database: ", reactiveDsDefaultUrl, e);
+			logger.error("Error connecting to database: {}", reactiveDsDefaultUrl, e);
 			e.printStackTrace();
 			throw e;
 		}
-		pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
-		testPgPool(pgClient, "scorpio_default_pool");
 	}
 
 	private String getClientPoolName(String tenant) {
@@ -123,44 +120,43 @@ public class ClientManager {
 	private void createAllTenantConnections(PgPool pool) {
 		pool.query("SELECT tennant_id, database_name FROM public.tenant").execute().onItem().invoke(r -> {
 			r.forEach(tr -> {
+				logger.info("Tennant table entry; id: {}, datanase: {}", tr.getString("tenant_id"), tr.getString("database_name"));
 				createClient(tr.getString("tennant_id"), tr.getString("database_name"));
 			});
 		});
 	}
 
 	private void createClient(String tenant, String dbName) {
-				String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
-				logger.info("Creating client for tenant '{}'", tenant);
-				AgroalDataSource clientDatasource;
-				try {
-					logger.info("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
-					clientDatasource = createDatasourceForTenant(tenant, dbName);
-					flywayMigrate(clientDatasource, tenant);
-					clientDatasource.close();
-					logger.info("Database migration for tenant '{}' finished", tenant);
-				} catch (SQLException e) {
-					logger.error("Database migration for tenant '{}' error: {}", tenant, e);
-					e.printStackTrace();
-				}
+		String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
+		logger.info("Creating client for tenant '{}'", tenant);
+		AgroalDataSource clientDatasource;
+		try {
+			logger.info("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
+			clientDatasource = createDatasourceForTenant(tenant, dbName);
+			flywayMigrate(clientDatasource, tenant);
+			clientDatasource.close();
+			logger.info("Database migration for tenant '{}' finished", tenant);
+		} catch (SQLException e) {
+			logger.error("Database migration for tenant '{}' error: {}", tenant, e);
+			e.printStackTrace();
+		}
 
-				String poolName = getClientPoolName(tenant);
-				logger.info("Creating client pool '{}'' for tenant '{}'", tenant, poolName);
-				PgPool clientPool = createPgPool(poolName, databaseUrl);
-				testPgPool(clientPool, poolName);
-				tenant2Client.put(tenant, Uni.createFrom().item(clientPool));
-				logger.info("Done Creating client for tenant '{}'", tenant);
+		String poolName = getClientPoolName(tenant);
+		logger.info("Creating client pool '{}'' for tenant '{}'", tenant, poolName);
+		PgPool clientPool = createPgPool(poolName, databaseUrl);
+		testPgPool(clientPool, poolName);
+		tenant2Client.put(tenant, Uni.createFrom().item(clientPool));
+		logger.info("Done Creating client for tenant '{}'", tenant);
 	}
 
 	private void createAllTenantConnectionsSync() {
-
 		try(AgroalDataSource dataSource = createDatasource(jdbcBaseUrl)) {
-			var rs = dataSource.getConnection().prepareStatement("SELECT tennant_id, database_name FROM public.tenant").executeQuery();
-			rs.first();
+			var statement = dataSource.getConnection().prepareStatement("SELECT tenant_id, database_name FROM public.tenant");
+			var rs = statement.executeQuery();
+			rs.next();
 			while (!rs.isAfterLast()) {
-				// String tenant = rs.getString("tennant_id");
-				// String dbName = rs.getString("database_name");
-				String tenant = rs.getString(1);
-				String dbName = rs.getString(2);
+				String tenant = rs.getString("tenant_id");
+				String dbName = rs.getString("database_name");
 				createClient(tenant, dbName);
 				rs.next();
 			}
@@ -200,17 +196,13 @@ public class ClientManager {
 			.setIdleTimeoutUnit(TimeUnit.SECONDS)
 			.setConnectionTimeout((int) connectionTime.getSeconds())
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
-		// return PgPool.pool(vertx, connectOptions, poolOptions);
-		return PgPool.pool(connectOptions, poolOptions);
+		return PgPool.pool(vertx, connectOptions, poolOptions);
 	}
 
 	private void testPgPool(PgPool pool, String poolName) {
-		logger.info("Reactive datasource pool {} test query: SELECT 1", poolName);
-		// pool.query("SELECT 1").execute().onItem().invoke(r -> {
-		// 	logger.info("Reactive datasource pool {} test query {}", poolName, r.size()==1?"OK":"ERROR");
-		// });
+		logger.info("Reactive datasource pool {} test: ", pool);
 		int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(5)).rowCount();
-		logger.info("Reactive datasource pool {} test query {}", poolName, cnt==1?"OK":"ERROR");
+		logger.info("Reactive datasource pool {} test query {} ({})", poolName, cnt==1?"OK":"ERROR", pool);
 	}
 
 	private Uni<PgPool> getTenant(String tenant, boolean createDB) {
