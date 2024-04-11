@@ -99,6 +99,9 @@ public class ClientManager {
 	@ConfigProperty(name = "pool.initialSize")
 	int initialSize;
 
+	@ConfigProperty(name = "ngsild.create-tenant-datasource-at-start", defaultValue = "false")
+	boolean createTenantDatasourceAtStart;
+
 	protected ConcurrentMap<String, Uni<PgPool>> tenant2Client = Maps.newConcurrentMap();
 
 	@PostConstruct
@@ -114,7 +117,9 @@ public class ClientManager {
 			testPgPool(pgClient, "scorpio_default_pool");
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
 			// createAllTenantConnectionsSync();
-			createAllTenantConnections(pgClient);
+			if (createTenantDatasourceAtStart) {
+				createAllTenantConnections(pgClient);
+			}
 		} catch (RuntimeException e) {
 			logger.error("Error connecting to database: {}", reactiveDsDefaultUrl, e);
 			throw e;
@@ -135,32 +140,32 @@ public class ClientManager {
 	// }
 
 	private void createAllTenantConnections(PgPool pool) {
-		pool.query("SELECT tenant_id, database_name FROM public.tenant").execute().await().atMost(Duration.ofSeconds(5)).spliterator().forEachRemaining(r -> {
-			createClient(r.getString("tenant_id"), r.getString("database_name"));
-		});
+		pool.query("SELECT tenant_id, database_name FROM public.tenant").execute().await().atMost(Duration.ofSeconds(10)).spliterator().forEachRemaining(r ->
+			createClient(r.getString("tenant_id"), r.getString("database_name"))
+		);
 	}
 
 	private void createClient(String tenant, String dbName) {
 		String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
-		logger.info("Creating client for tenant '{}'", tenant);
+		logger.debug("Creating reactive database client pool for tenant '{}'", tenant);
 		AgroalDataSource clientDatasource;
 		try {
-			logger.info("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
+			logger.debug("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
 			clientDatasource = createDatasourceForTenant(tenant, dbName);
 			flywayMigrate(clientDatasource, tenant);
 			clientDatasource.close();
-			logger.info("Database migration for tenant '{}' finished", tenant);
+			logger.debug("Database migration for tenant '{}' finished", tenant);
 		} catch (SQLException e) {
 			logger.error("Database migration for tenant '{}' error: {}", tenant, e);
 			e.printStackTrace();
 		}
 
 		String poolName = getClientPoolName(tenant);
-		logger.info("Creating client pool '{}' for tenant '{}'", poolName, tenant);
+		logger.debug("Creating client pool '{}' for tenant '{}'", poolName, tenant);
 		PgPool pool = createPgPool(poolName, databaseUrl);
 		testPgPool(pool, poolName);
 		tenant2Client.put(tenant, Uni.createFrom().item(pool));
-		logger.info("Done creating client for tenant '{}'", tenant);
+		logger.info("Created reactive database client pool for tenant '{}'", tenant);
 	}
 
 	private void createAllTenantConnectionsSync() {
@@ -206,7 +211,7 @@ public class ClientManager {
 	}
 
 	private boolean testPgPool(PgPool pool, String poolName) {
-		int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(5)).rowCount();
+		int cnt = pool.query("SELECT * fron not_existing").execute().await().atMost(Duration.ofSeconds(5)).rowCount();
 		logger.debug("Reactive datasource pool {} test query {} ({})", poolName, cnt==1?"OK":"ERROR", pool);
 		return cnt==1;
 	}
@@ -219,23 +224,21 @@ public class ClientManager {
 		}));
 	}
 
-	private Uni<String> determineTargetDataSource(String tenantidvalue, boolean createDB) {
-		return createDataSourceForTenantId(tenantidvalue, createDB).onItem().transform(tenantDataSource -> {
-			logger.info("Running database migration for tenant '{}' on database '{}'", tenantidvalue, tenantDataSource.getItem2());
-			flywayMigrate(tenantDataSource.getItem1(), tenantidvalue);
+	private Uni<String> determineTargetDataSource(String tenant, boolean createDB) {
+		return createDataSourceForTenantId(tenant, createDB).onItem().transform(tenantDataSource -> {
+			logger.info("Running database migration for tenant '{}' on database '{}'", tenant, tenantDataSource.getItem2());
+			flywayMigrate(tenantDataSource.getItem1(), tenant);
 			tenantDataSource.getItem1().close();
 			return tenantDataSource.getItem2();
 		});
 	}
 
-	private Uni<Tuple2<AgroalDataSource, String>> createDataSourceForTenantId(String tenantidvalue, boolean createDB) {
-		return findDataBaseNameByTenantId(tenantidvalue, createDB).onItem()
-				.transform(Unchecked.function(tenantDatabaseName -> {
-					AgroalDataSource agroaldataSource = createDatasourceForTenant(tenantidvalue, tenantDatabaseName);
-					return Tuple2.of(agroaldataSource, tenantDatabaseName);
-				}));
+	private Uni<Tuple2<AgroalDataSource, String>> createDataSourceForTenantId(String tenant, boolean createDB) {
+		return findDataBaseNameByTenantId(tenant, createDB).onItem()
+				.transform(Unchecked.function(tenantDbName ->
+					Tuple2.of(createDatasourceForTenant(tenant, tenantDbName), tenantDbName)
+				));
 	}
-
 
 	private AgroalDataSource createDatasourceForTenant(String tenant, String tenantDatabaseName) throws SQLException {
 		String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
