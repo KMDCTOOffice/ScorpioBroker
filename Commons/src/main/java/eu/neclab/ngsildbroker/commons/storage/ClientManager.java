@@ -49,7 +49,7 @@ public class ClientManager {
 	@Inject
 	QuarkusConfigDump quarkusConfigDump;
 
-	// Create own pgPool from quarkus.datasource properties
+	// Create local/custom pgPool from quarkus.datasource properties
 	// @Inject
 	PgPool pgClient;
 

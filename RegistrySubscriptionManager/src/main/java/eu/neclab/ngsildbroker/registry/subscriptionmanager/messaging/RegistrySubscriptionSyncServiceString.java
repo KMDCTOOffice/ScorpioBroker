@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
@@ -32,6 +33,7 @@ import eu.neclab.ngsildbroker.commons.tools.MicroServiceUtils;
 import eu.neclab.ngsildbroker.registry.subscriptionmanager.service.RegistrySubscriptionService;
 import io.netty.channel.EventLoopGroup;
 import io.quarkus.arc.profile.IfBuildProfile;
+import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.reactive.messaging.MutinyEmitter;
@@ -127,6 +129,8 @@ public class RegistrySubscriptionSyncServiceString implements SyncService {
 	@ConfigProperty(name = "scorpio.messaging.maxSize")
 	int messageSize;
 
+	boolean syncEnabled = false;
+
 	@PostConstruct
 	public void setup() {
 		INSTANCE_ID = new AliveAnnouncement(SYNC_ID);
@@ -134,20 +138,32 @@ public class RegistrySubscriptionSyncServiceString implements SyncService {
 		this.executor = vertx.getDelegate().nettyEventLoopGroup();
 	}
 
+	void onStart(@Observes StartupEvent event) {
+		syncEnabled = true;
+	}
+
 	@Scheduled(every = "${scorpio.sync.announcement-time}", delayed = "${scorpio.startupdelay}")
 	Uni<Void> syncTask() {
-		MicroServiceUtils.serializeAndSplitObjectAndEmit(INSTANCE_ID, messageSize, aliveEmitter, objectMapper);
+		if (syncEnabled) {
+			MicroServiceUtils.serializeAndSplitObjectAndEmit(INSTANCE_ID, messageSize, aliveEmitter, objectMapper);
+		} else {
+			logger.warn("Ignoring sync task fired before app startup finish.");
+		}
 		return Uni.createFrom().voidItem();
 	}
 
 	@Scheduled(every = "${scorpio.sync.check-time}", delayed = "${scorpio.startupdelay}")
 	Uni<Void> checkTask() {
-		if (!currentInstances.equals(lastInstances)) {
-			recalculateSubscriptions();
+		if (syncEnabled) {
+			if (!currentInstances.equals(lastInstances)) {
+				recalculateSubscriptions();
+			}
+			lastInstances.clear();
+			lastInstances.addAll(currentInstances);
+			currentInstances.clear();
+		} else {
+			logger.warn("Ignoring check task fired before app startup finish.");
 		}
-		lastInstances.clear();
-		lastInstances.addAll(currentInstances);
-		currentInstances.clear();
 		return Uni.createFrom().voidItem();
 	}
 
