@@ -211,7 +211,7 @@ public class ClientManager {
 	}
 
 	private boolean testPgPool(PgPool pool, String poolName) {
-		int cnt = pool.query("SELECT * fron not_existing").execute().await().atMost(Duration.ofSeconds(5)).rowCount();
+		int cnt = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(5)).rowCount();
 		logger.debug("Reactive datasource pool {} test query {} ({})", poolName, cnt==1?"OK":"ERROR", pool);
 		return cnt==1;
 	}
