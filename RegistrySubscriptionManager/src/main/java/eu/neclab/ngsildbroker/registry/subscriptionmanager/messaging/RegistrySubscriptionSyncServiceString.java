@@ -30,6 +30,7 @@ import eu.neclab.ngsildbroker.commons.datatypes.requests.subscription.Subscripti
 import eu.neclab.ngsildbroker.commons.serialization.messaging.CollectMessageListener;
 import eu.neclab.ngsildbroker.commons.serialization.messaging.MessageCollector;
 import eu.neclab.ngsildbroker.commons.tools.MicroServiceUtils;
+import eu.neclab.ngsildbroker.commons.utils.AppStartupPredicate;
 import eu.neclab.ngsildbroker.registry.subscriptionmanager.service.RegistrySubscriptionService;
 import io.netty.channel.EventLoopGroup;
 import io.quarkus.arc.profile.IfBuildProfile;
@@ -142,7 +143,7 @@ public class RegistrySubscriptionSyncServiceString implements SyncService {
 		syncEnabled = true;
 	}
 
-	@Scheduled(every = "${scorpio.sync.announcement-time}", delayed = "${scorpio.startupdelay}")
+	@Scheduled(every = "${scorpio.sync.announcement-time}", delayed = "${scorpio.startupdelay}", skipExecutionIf = AppStartupPredicate.class)
 	Uni<Void> syncTask() {
 		if (syncEnabled) {
 			MicroServiceUtils.serializeAndSplitObjectAndEmit(INSTANCE_ID, messageSize, aliveEmitter, objectMapper);
@@ -152,7 +153,7 @@ public class RegistrySubscriptionSyncServiceString implements SyncService {
 		return Uni.createFrom().voidItem();
 	}
 
-	@Scheduled(every = "${scorpio.sync.check-time}", delayed = "${scorpio.startupdelay}")
+	@Scheduled(every = "${scorpio.sync.check-time}", delayed = "${scorpio.startupdelay}", skipExecutionIf = AppStartupPredicate.class)
 	Uni<Void> checkTask() {
 		if (syncEnabled) {
 			if (!currentInstances.equals(lastInstances)) {
