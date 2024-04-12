@@ -147,7 +147,7 @@ public class ClientManager {
 			{
 				String tenant = r.getString("tenant_id");
 				try {
-					PgPool tenantPool = migrateDbAndCreatePgPool(tenant, r.getString("database_name"));
+					PgPool tenantPool = migrateDbAndCreatePgPool(tenant, r.getString("database_name"), true);
 					tenant2Client.put(tenant, Uni.createFrom().item(tenantPool));
 				} catch (SQLException e) {
 					logger.error("Error creating ractive datasource pool for tenant '{}': ", tenant, e);
@@ -195,14 +195,14 @@ public class ClientManager {
 
 	private Uni<PgPool> createTenantClient(String tenant, boolean createDB) {
 		return findDataBaseNameByTenantId(tenant, createDB).onItem()
-			.transformToUni(Unchecked.function(dbName -> Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName))));
+			.transformToUni(Unchecked.function(dbName -> Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false))));
 	}
 
-	private PgPool migrateDbAndCreatePgPool(String tenant, String dbName) throws SQLException {
+	private PgPool migrateDbAndCreatePgPool(String tenant, String dbName, boolean testDbConnection) throws SQLException {
 		String dbUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
 		try {
 			flywayMigrate(tenant, dbName);
-			PgPool pool = createPgPool(getClientPoolName(tenant), dbUrl, true);
+			PgPool pool = createPgPool(getClientPoolName(tenant), dbUrl, testDbConnection);
 			logger.info("Created reactive database client pool for tenant '{}': {}", tenant, dbUrl);
 			return pool;
 		} catch (SQLException e) {
