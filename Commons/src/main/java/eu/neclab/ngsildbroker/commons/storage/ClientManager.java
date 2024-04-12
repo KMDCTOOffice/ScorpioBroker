@@ -101,6 +101,9 @@ public class ClientManager {
 	@ConfigProperty(name = "ngsild.create-tenant-datasource-at-start", defaultValue = "false")
 	boolean createTenantDatasourceAtStart;
 
+	@ConfigProperty(name = "ngsild.datasource-test_query", defaultValue = "SELECT 1")
+	String datasourceTestQuery;
+
 	protected ConcurrentMap<String, Uni<PgPool>> tenant2Client = Maps.newConcurrentMap();
 
 	@PostConstruct
@@ -112,15 +115,14 @@ public class ClientManager {
 
 		try {
 			// Migration od the database defined in quarkus.datasource.jdbc.url is done automatically, no need to do it here.
-			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl);
-			testPgPoolSync(pgClient, "scorpio_default_pool");
+			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl, true);
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
 			logger.info("Created custom reactive datasource connection pool: {}", reactiveDsDefaultUrl);
 			// createAllTenantConnectionsSync();
 			if (createTenantDatasourceAtStart) {
 				createAllTenantConnections(pgClient);
 			}
-		} catch (Throwable e) {
+		} catch (Exception e) {
 			logger.error("Error connecting to database: {}", reactiveDsDefaultUrl, e);
 			throw e;
 		}
@@ -140,25 +142,19 @@ public class ClientManager {
 	// }
 
 	private void createAllTenantConnections(PgPool pool) {
+		logger.debug("Creating all reactive datasource pools");
 		pool.query("SELECT tenant_id, database_name FROM public.tenant").execute().await().atMost(Duration.ofSeconds(10)).spliterator().forEachRemaining(r ->
-			createClient(r.getString("tenant_id"), r.getString("database_name"))
+			{
+				String tenant = r.getString("tenant_id");
+				try {
+					PgPool tenantPool = migrateDbAndCreatePgPool(tenant, r.getString("database_name"));
+					tenant2Client.put(tenant, Uni.createFrom().item(tenantPool));
+				} catch (SQLException e) {
+					logger.error("Error creating ractive datasource pool for tenant '{}': ", tenant, e);
+					e.printStackTrace();
+				}
+			}
 		);
-	}
-
-	private void createClient(String tenant, String dbName) {
-		String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
-		try {
-			flywayMigrate(tenant, dbName);
-			String poolName = getClientPoolName(tenant);
-			logger.debug("Creating client pool '{}' for tenant '{}'", poolName, tenant);
-			PgPool pool = createPgPool(poolName, databaseUrl);
-			testPgPoolSync(pool, poolName);
-			tenant2Client.put(tenant, Uni.createFrom().item(pool));
-			logger.info("Created reactive database client pool for tenant '{}': {}", tenant, databaseUrl);
-		} catch (SQLException e) {
-			logger.error("Client pool creation for tenant '{}' failed: Database migration error: {}", tenant, e);
-			e.printStackTrace();
-		}
 	}
 
 	public Uni<PgPool> getClient(String tenant, boolean create) {
@@ -168,8 +164,8 @@ public class ClientManager {
 		return tenant2Client.computeIfAbsent(tenant, t -> createTenantClient(t, create)/*.onItem().transformToUni(c -> Uni.createFrom().item(c)); */);
 	}
 
-	private PgPool createPgPool(String poolName, String databaseUrl) {
-		logger.info("Creating reactive datasource pool '{}'; database: {}, sslmode: {}", poolName, databaseUrl, reactiveDsPostgresqlSslMode);
+	private PgPool createPgPool(String poolName, String databaseUrl, boolean test) {
+		logger.debug("Creating reactive datasource pool '{}'; database: {}, sslmode: {}", poolName, databaseUrl, reactiveDsPostgresqlSslMode);
 		PgConnectOptions connectOptions = PgConnectOptions.fromUri(databaseUrl)
 			.setUser(username)
 			.setPassword(password)
@@ -184,41 +180,36 @@ public class ClientManager {
 			.setIdleTimeoutUnit(TimeUnit.SECONDS)
 			.setConnectionTimeout((int) connectionTime.getSeconds())
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
-		return PgPool.pool(vertx, connectOptions, poolOptions);
+		PgPool pool = PgPool.pool(vertx, connectOptions, poolOptions);
+		if (test) {
+			testPgPoolSync(pool, poolName);
+		}
+		return pool;
 	}
 
 	private boolean testPgPoolSync(PgPool pool, String poolName) {
-		boolean testResult = pool.query("SELECT 1").execute().await().atMost(Duration.ofSeconds(5)).rowCount()==1;
+		boolean testResult = pool.query(datasourceTestQuery).execute().await().atMost(Duration.ofSeconds(5)).rowCount()==1;
 		logger.debug("Reactive datasource pool {} test query {} ({})", poolName, testResult?"OK":"ERROR", pool);
 		return testResult;
 	}
 
 	private Uni<PgPool> createTenantClient(String tenant, boolean createDB) {
-		// return determineTargetDataSource(tenant, createDB).onItem()
 		return findDataBaseNameByTenantId(tenant, createDB).onItem()
-			.transformToUni(Unchecked.function(finalDataBase -> {
-				flywayMigrate(tenant, finalDataBase);
-				String databaseUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, finalDataBase);
-				logger.debug("Creating reactive datasource pool for tenant '{}' with database '{}'", tenant, finalDataBase);
-				return Uni.createFrom().item(createPgPool(getClientPoolName(tenant), databaseUrl));
-			}));
+			.transformToUni(Unchecked.function(dbName -> Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName))));
 	}
 
-	// private Uni<String> determineTargetDataSource(String tenant, boolean createDB) {
-	// 	return createDataSourceForTenantId(tenant, createDB).onItem()
-	// 		.transform(tenantDataSource -> {
-	// 			flywayMigrate(tenantDataSource.getItem1(), tenant);
-	// 			tenantDataSource.getItem1().close();
-	// 			return tenantDataSource.getItem2();
-	// 		});
-	// }
-
-	// private Uni<Tuple2<AgroalDataSource, String>> createDataSourceForTenantId(String tenant, boolean createDB) {
-	// 	return findDataBaseNameByTenantId(tenant, createDB).onItem()
-	// 		.transform(Unchecked.function(tenantDbName ->
-	// 			Tuple2.of(createDatasourceForTenant(tenant, tenantDbName), tenantDbName)
-	// 		));
-	// }
+	private PgPool migrateDbAndCreatePgPool(String tenant, String dbName) throws SQLException {
+		String dbUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
+		try {
+			flywayMigrate(tenant, dbName);
+			PgPool pool = createPgPool(getClientPoolName(tenant), dbUrl, true);
+			logger.info("Created reactive database client pool for tenant '{}': {}", tenant, dbUrl);
+			return pool;
+		} catch (SQLException e) {
+			logger.error("Client pool creation for tenant '{}' failed: Database migration error: {}", tenant, e);
+			throw e;
+		}
+	}
 
 	private AgroalDataSource createDatasourceForTenant(String tenant, String tenantDatabaseName) throws SQLException {
 		String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
