@@ -104,7 +104,7 @@ public class ClientManager {
 	protected ConcurrentMap<String, Uni<PgPool>> tenant2Client = Maps.newConcurrentMap();
 
 	@PostConstruct
-	void loadTenantClients() throws URISyntaxException {
+	void init() throws URISyntaxException {
 		logger.warn("Using custom reactive datasource connection pool!");
 
 		logger.info("Base jdbc url: {}", new URI(jdbcBaseUrl));
@@ -169,14 +169,21 @@ public class ClientManager {
 		);
 	}
 
-	private PgPool createPgPool(String poolName, String databaseUrl, boolean test) {
-		logger.debug("Creating reactive datasource pool '{}'; database: {}, sslmode: {}", poolName, databaseUrl, reactiveDsPostgresqlSslMode);
-		PgConnectOptions connectOptions = PgConnectOptions.fromUri(databaseUrl)
+	public PgConnectOptions getDefaultPgConnectionOptions() {
+		return getPgConnectionOptions(reactiveDsDefaultUrl);
+	}
+
+	private PgConnectOptions getPgConnectionOptions(String databaseUrl) {
+		return PgConnectOptions.fromUri(databaseUrl)
 			.setUser(username)
 			.setPassword(password)
 			.setCachePreparedStatements(reactiveDsCachePreparedStatements)
 			.setSslMode(SslMode.valueOf(reactiveDsPostgresqlSslMode.toUpperCase()))
 			.setTrustAll(reactiveDsPostgresqlSslTrustAll);
+	}
+
+	private PgPool createPgPool(String poolName, String databaseUrl, boolean test) {
+		logger.debug("Creating reactive datasource pool '{}'; database: {}, sslmode: {}", poolName, databaseUrl, reactiveDsPostgresqlSslMode);
 		PoolOptions poolOptions = new PoolOptions()
 			.setName(poolName)
 			.setShared(reactiveDsShared)
@@ -185,7 +192,7 @@ public class ClientManager {
 			.setIdleTimeoutUnit(TimeUnit.SECONDS)
 			.setConnectionTimeout((int) connectionTime.getSeconds())
 			.setConnectionTimeoutUnit(TimeUnit.SECONDS);
-		PgPool pool = PgPool.pool(vertx, connectOptions, poolOptions);
+		PgPool pool = PgPool.pool(vertx, getPgConnectionOptions(databaseUrl), poolOptions);
 		if (test) {
 			testPgPoolSync(pool, poolName);
 		}
@@ -296,4 +303,6 @@ public class ClientManager {
 			}
 		}
 	}
+
+
 }

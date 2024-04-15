@@ -38,12 +38,12 @@ public class SubscriptionSyncSQS implements SyncService {
 	@Inject
 	SubscriptionService subService;
 
-	@ConfigProperty(name = "quarkus.datasource.reactive.url")
-	String reactiveDefaultUrl;
-	@ConfigProperty(name = "quarkus.datasource.username")
-	String username;
-	@ConfigProperty(name = "quarkus.datasource.password")
-	String password;
+	// @ConfigProperty(name = "quarkus.datasource.reactive.url")
+	// String reactiveDefaultUrl;
+	// @ConfigProperty(name = "quarkus.datasource.username")
+	// String username;
+	// @ConfigProperty(name = "quarkus.datasource.password")
+	// String password;
 
 	Logger logger = LoggerFactory.getLogger(SubscriptionSyncSQS.class);
 
@@ -56,9 +56,9 @@ public class SubscriptionSyncSQS implements SyncService {
 
 	@PostConstruct
 	void setup() {
-		logger.info("Configuring subscriber with default reactive jdbc url: {}", reactiveDefaultUrl);
-
-		pgSubscriber = PgSubscriber.subscriber(vertx, PgConnectOptions.fromUri(reactiveDefaultUrl).setUser(username).setPassword(password));
+		logger.info("Configuring subscriber with default reactive datasource oprions from Client Manager bean.");
+		pgSubscriber = PgSubscriber.subscriber(vertx, clientManager.getDefaultPgConnectionOptions());
+		// pgSubscriber = PgSubscriber.subscriber(vertx, PgConnectOptions.fromUri(reactiveDefaultUrl).setUser(username).setPassword(password));
 		subService.addSyncService(this);
 		pgSubscriber.channel("subscriptionchannel").handler(notice -> {
 			logger.debug("notice received: " + notice);
