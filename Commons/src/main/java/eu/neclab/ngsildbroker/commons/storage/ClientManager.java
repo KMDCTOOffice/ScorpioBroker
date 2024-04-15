@@ -32,9 +32,10 @@ import io.quarkus.arc.Arc;
 import io.quarkus.flyway.runtime.FlywayContainer;
 import io.quarkus.flyway.runtime.FlywayContainerProducer;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.unchecked.Unchecked;
 import io.vertx.mutiny.core.Vertx;
 import io.vertx.mutiny.pgclient.PgPool;
+import io.vertx.mutiny.sqlclient.Row;
+import io.vertx.mutiny.sqlclient.RowSet;
 import io.vertx.mutiny.sqlclient.Tuple;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.SslMode;
@@ -132,7 +133,10 @@ public class ClientManager {
 		if (tenant == null || AppConstants.INTERNAL_NULL_KEY.equals(tenant)) {
 			return tenant2Client.get(AppConstants.INTERNAL_NULL_KEY);
 		}
-		return tenant2Client.computeIfAbsent(tenant, t -> createTenantClient(t, create));
+		return tenant2Client.computeIfAbsent(tenant, t-> {
+			logger.debug("Tenant '{}' not in tenant2Client map - creating new client...", t);
+			return createTenantClientPool(t, create);
+		});
 	}
 
 	private String getClientPoolName(String tenant) {
@@ -193,9 +197,44 @@ public class ClientManager {
 		return testResult;
 	}
 
-	private Uni<PgPool> createTenantClient(String tenant, boolean createDB) {
-		return findDataBaseNameByTenantId(tenant, createDB).onItem()
-			.transformToUni(Unchecked.function(dbName -> Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false))));
+	private String getTenantDbName(String tenant, boolean createDB) {
+		// old method with await
+		// String dbName = findDataBaseNameByTenantId(tenant, createDB).await().atMost(Duration.ofSeconds(5));
+
+		RowSet<Row> rows = pgClient.preparedQuery("SELECT tenant_id, database_name FROM public.tenant WHERE tenant_id = $1").
+		execute(Tuple.of(tenant)).await().atMost(Duration.ofSeconds(5));
+		if (rows.rowCount()==0) {
+			String dbName = "ngb" + tenant;
+			if (createDB) {
+				logger.warn("Tenant database name not found; creating and returning generated BD name: {}", dbName);
+				pgClient.preparedQuery("CREATE DATABASE $1").execute(Tuple.of(tenant)).await().atMost(Duration.ofSeconds(5));
+				return dbName;
+			} else {
+				throw new RuntimeException("Tenant database name not found tenant '"+tenant+"'");
+			}
+		} else if (rows.rowCount()==1) {
+			return rows.iterator().next().getString("database_name");
+		}
+		throw new RuntimeException("Invalid number of rows returned for tenant '"+tenant+"' database name: "+rows.rowCount());
+	}
+
+	private Uni<PgPool> createTenantClientPool(String tenant, boolean createDB) {
+		try {
+			return Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, getTenantDbName(tenant, createDB), false));
+		} catch (SQLException e) {
+			throw new RuntimeException("Error creating ractive connection pool for tenant '"+tenant+"'", e);
+		}
+		// findDataBaseNameByTenantId(tenant, createDB).onItem().invoke(dbName -> {
+		// 	try {
+		// 		pool = migrateDbAndCreatePgPool(tenant, dbName, false);
+		// 	} catch (SQLException e) {
+		// 		// TODO Auto-generated catch block
+		// 		e.printStackTrace();
+		// 	}
+		// });
+			// .transform(dbName -> Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false)));
+		// return Uni.createFrom().item(pool);
+		// return pool;
 	}
 
 	private PgPool migrateDbAndCreatePgPool(String tenant, String dbName, boolean testDbConnection) throws SQLException {
