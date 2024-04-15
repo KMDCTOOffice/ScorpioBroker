@@ -135,11 +135,14 @@ public class ClientManager {
 			logger.trace("Tenant client cache hit for tenant {}", tenant);
 			return tenant2Client.get(tenant);
 		} else {
-			logger.debug("Tenant client cache miss for tenant {}; returning client pool creation uni...", tenant);
+			logger.debug("Tenant client cache miss for tenant {}; asynchronously creating connection pool", tenant);
 			return findDataBaseNameByTenantId(tenant, create).onItem().transformToUni(dbName -> {
 			try {
 				return Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false))
-					.invoke(p -> tenant2Client.put(tenant, Uni.createFrom().item(p)));
+					.invoke(p -> {
+						tenant2Client.put(tenant, Uni.createFrom().item(p));
+						logger.debug("Cached new tenant '{}' client pool.", tenant);
+					});
 			} catch (SQLException e) {
 				return Uni.createFrom().failure(e);
 			}
@@ -232,10 +235,7 @@ public class ClientManager {
 		try {
 			flywayMigrate(tenant, dbName);
 			PgPool pool = createPgPool(getClientPoolName(tenant), dbUrl, testDbConnection);
-			logger.info("Created reactive database client pool for tenant '{}': {}", tenant, dbUrl);
-			if (logger.isDebugEnabled()) {
-				Thread.dumpStack();
-			}
+			logger.info("Created reactive database client pool for tenant '{}': {} ({})", tenant, dbUrl, pool);
 			return pool;
 		} catch (SQLException e) {
 			logger.error("Client pool creation for tenant '{}' failed: Database migration error: {}", tenant, e);
