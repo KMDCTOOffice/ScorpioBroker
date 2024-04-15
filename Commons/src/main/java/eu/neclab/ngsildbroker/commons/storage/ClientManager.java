@@ -131,6 +131,11 @@ public class ClientManager {
 		if (tenant == null || AppConstants.INTERNAL_NULL_KEY.equals(tenant)) {
 			return tenant2Client.get(AppConstants.INTERNAL_NULL_KEY);
 		}
+		if (tenant2Client.containsKey(tenant)) {
+			logger.debug("Tenant client cache hit for tenant {}", tenant);
+		} else {
+			logger.debug("Tenant client cache miss for tenant {}", tenant);
+		}
 		return tenant2Client.computeIfAbsent(tenant, t-> {
 			logger.debug("Tenant '{}' not in tenant2Client map - creating new client...", t);
 			return createTenantClientPool(t, create);
@@ -140,15 +145,6 @@ public class ClientManager {
 	private String getClientPoolName(String tenant) {
 		return "scorpio_tenant_" + tenant + "_pool";
 	}
-
-	// private void createAllTenantConnections(PgPool pool) {
-	// 	pool.query("SELECT tennant_id, database_name FROM public.tenant").execute().onItem().invoke(r -> {
-	// 		r.forEach(tr -> {
-	// 			logger.info("Tenant table entry; id: {}, database: {}", tr.getString("tenant_id"), tr.getString("database_name"));
-	// 			createClient(tr.getString("tennant_id"), tr.getString("database_name"));
-	// 		});
-	// 	});
-	// }
 
 	private void createAllTenantConnections(PgPool pool) {
 		logger.debug("Creating all reactive datasource pools");
@@ -251,8 +247,8 @@ public class ClientManager {
 		}
 	}
 
-	private AgroalDataSource createDatasourceForTenant(String tenant, String tenantDatabaseName) throws SQLException {
-		String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, tenantDatabaseName);
+	private AgroalDataSource createDatasourceForTenant(String tenant, String dbName) throws SQLException {
+		String tenantJdbcURL = "jdbc:" + DBUtil.databaseURLFromPostgresJdbcUrl(jdbcBaseUrl, dbName);
 		logger.debug("Creating datasource for tenant '{}' with jdbc url: {}", tenant, tenantJdbcURL);
 		return createDatasource(tenantJdbcURL);
 	}
