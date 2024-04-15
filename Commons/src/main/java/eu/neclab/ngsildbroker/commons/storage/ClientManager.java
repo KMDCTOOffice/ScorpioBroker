@@ -14,7 +14,6 @@ import com.google.common.collect.Maps;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
-import org.flywaydb.core.internal.authentication.postgres.PgpassFileReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import eu.neclab.ngsildbroker.commons.constants.AppConstants;
@@ -133,15 +132,14 @@ public class ClientManager {
 			return tenant2Client.get(AppConstants.INTERNAL_NULL_KEY);
 		}
 		if (tenant2Client.containsKey(tenant)) {
-			logger.debug("Tenant client cache hit for tenant {}", tenant);
+			logger.trace("Tenant client cache hit for tenant {}", tenant);
 			return tenant2Client.get(tenant);
 		} else {
 			logger.debug("Tenant client cache miss for tenant {}; returning client pool creation uni...", tenant);
 			return findDataBaseNameByTenantId(tenant, create).onItem().transformToUni(dbName -> {
 			try {
-				Uni<PgPool> pool = Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false));
-				tenant2Client.put(tenant, pool);
-				return pool;
+				return Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false))
+					.invoke(p -> tenant2Client.put(tenant, Uni.createFrom().item(p)));
 			} catch (SQLException e) {
 				return Uni.createFrom().failure(e);
 			}
@@ -198,10 +196,8 @@ public class ClientManager {
 		return testResult;
 	}
 
+	// TODO: refactor to Uni
 	private String getTenantDbName(String tenant, boolean createDB) {
-		// old method with await
-		// String dbName = findDataBaseNameByTenantId(tenant, createDB).await().atMost(Duration.ofSeconds(5));
-
 		RowSet<Row> rows = pgClient.preparedQuery("SELECT tenant_id, database_name FROM public.tenant WHERE tenant_id = $1").
 		execute(Tuple.of(tenant)).await().atMost(Duration.ofSeconds(5));
 		if (rows.rowCount()==0) {
@@ -229,23 +225,6 @@ public class ClientManager {
 				return Uni.createFrom().failure(e);
 			}
 		 });
-
-		// try {
-		// 	return Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, getTenantDbName(tenant, createDB), false));
-		// } catch (SQLException e) {
-		// 	throw new RuntimeException("Error creating ractive connection pool for tenant '"+tenant+"'", e);
-		// }
-		// findDataBaseNameByTenantId(tenant, createDB).onItem().invoke(dbName -> {
-		// 	try {
-		// 		pool = migrateDbAndCreatePgPool(tenant, dbName, false);
-		// 	} catch (SQLException e) {
-		// 		// TODO Auto-generated catch block
-		// 		e.printStackTrace();
-		// 	}
-		// // });
-		// 	// .transform(dbName -> Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false)));
-		// return Uni.createFrom().item(pool);
-		// return pool;
 	}
 
 	private PgPool migrateDbAndCreatePgPool(String tenant, String dbName, boolean testDbConnection) throws SQLException {
