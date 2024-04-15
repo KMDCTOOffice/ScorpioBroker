@@ -2,8 +2,6 @@ package eu.neclab.ngsildbroker.commons.storage;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentMap;
@@ -99,7 +97,7 @@ public class ClientManager {
 	@ConfigProperty(name = "pool.initialSize")
 	int initialSize;
 
-	@ConfigProperty(name = "ngsild.create-tenant-datasource-at-start", defaultValue = "false")
+	@ConfigProperty(name = "ngsild.create-tenant-datasource-at-start", defaultValue = "true")
 	boolean createTenantDatasourceAtStart;
 
 	@ConfigProperty(name = "ngsild.datasource-test_query", defaultValue = "SELECT 1")
