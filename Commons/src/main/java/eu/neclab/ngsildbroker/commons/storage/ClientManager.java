@@ -32,8 +32,6 @@ import io.quarkus.flyway.runtime.FlywayContainerProducer;
 import io.smallrye.mutiny.Uni;
 import io.vertx.mutiny.core.Vertx;
 import io.vertx.mutiny.pgclient.PgPool;
-import io.vertx.mutiny.sqlclient.Row;
-import io.vertx.mutiny.sqlclient.RowSet;
 import io.vertx.mutiny.sqlclient.Tuple;
 import io.vertx.pgclient.PgConnectOptions;
 import io.vertx.pgclient.SslMode;
@@ -48,7 +46,7 @@ public class ClientManager {
 	QuarkusConfigDump quarkusConfigDump;
 
 	// @Inject
-	// Create local/custom pgPool from quarkus.datasource properties
+	// Create local/custom pgPool from quarkus.datasource properties, so all pgPools are created in the same way
 	PgPool pgClient;
 
 	@Inject
@@ -114,9 +112,10 @@ public class ClientManager {
 
 		try {
 			// Migration of the database defined in quarkus.datasource.jdbc.url is done automatically, no need to do it here.
+			logger.info("Creating custom default reactive datasource connection pool: {}", reactiveDsDefaultUrl);
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl, true);
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-			logger.info("Created custom default reactive datasource connection pool: {}", reactiveDsDefaultUrl);
+			logger.debug("Created custom default reactive datasource connection pool: {}", reactiveDsDefaultUrl);
 			if (createTenantDatasourceAtStart) {
 				// All tenant databases are migrated as part of the client pool creation.
 				createAllTenantConnections(pgClient);
@@ -199,43 +198,13 @@ public class ClientManager {
 		return testResult;
 	}
 
-	// TODO: refactor to Uni
-	private String getTenantDbName(String tenant, boolean createDB) {
-		RowSet<Row> rows = pgClient.preparedQuery("SELECT tenant_id, database_name FROM public.tenant WHERE tenant_id = $1").
-		execute(Tuple.of(tenant)).await().atMost(Duration.ofSeconds(5));
-		if (rows.rowCount()==0) {
-			String dbName = "ngb" + tenant;
-			if (createDB) {
-				logger.warn("Tenant database name not found; creating and returning generated BD name: {}", dbName);
-				pgClient.preparedQuery("CREATE DATABASE $1").execute(Tuple.of(tenant)).await().atMost(Duration.ofSeconds(5));
-				return dbName;
-			} else {
-				throw new RuntimeException("Tenant database name not found tenant '"+tenant+"'");
-			}
-		} else if (rows.rowCount()==1) {
-			return rows.iterator().next().getString("database_name");
-		}
-		throw new RuntimeException("Invalid number of rows returned for tenant '"+tenant+"' database name: "+rows.rowCount());
-	}
-
-	private Uni<PgPool> createTenantClientPool(String tenant, boolean createDB) {
-		 return findDataBaseNameByTenantId(tenant, createDB).onItem().transformToUni(dbName -> {
-			try {
-				Uni<PgPool> pool = Uni.createFrom().item(migrateDbAndCreatePgPool(tenant, dbName, false));
-				tenant2Client.put(tenant, pool);
-				return pool;
-			} catch (SQLException e) {
-				return Uni.createFrom().failure(e);
-			}
-		 });
-	}
-
 	private PgPool migrateDbAndCreatePgPool(String tenant, String dbName, boolean testDbConnection) throws SQLException {
 		String dbUrl = DBUtil.databaseURLFromPostgresJdbcUrl(reactiveDsDefaultUrl, dbName);
 		try {
+			logger.info("Creating reactive database client pool for tenant '{}': {}", tenant, dbUrl);
 			flywayMigrate(tenant, dbName);
 			PgPool pool = createPgPool(getClientPoolName(tenant), dbUrl, testDbConnection);
-			logger.info("Created reactive database client pool for tenant '{}': {} ({})", tenant, dbUrl, pool);
+			logger.debug("Created reactive database client pool for tenant '{}': {} ({})", tenant, dbUrl, pool);
 			return pool;
 		} catch (SQLException e) {
 			logger.error("Client pool creation for tenant '{}' failed: Database migration error: {}", tenant, e);
