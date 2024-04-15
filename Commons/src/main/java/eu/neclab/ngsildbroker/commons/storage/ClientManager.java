@@ -114,18 +114,25 @@ public class ClientManager {
 		logger.info("Default reactive jdbc url: {}, sslmode: {}", new URI(reactiveDsDefaultUrl), reactiveDsPostgresqlSslMode);
 
 		try {
-			// Migration od the database defined in quarkus.datasource.jdbc.url is done automatically, no need to do it here.
+			// Migration of the database defined in quarkus.datasource.jdbc.url is done automatically, no need to do it here.
 			pgClient = createPgPool("scorpio_default_pool", reactiveDsDefaultUrl, true);
 			tenant2Client.put(AppConstants.INTERNAL_NULL_KEY, Uni.createFrom().item(pgClient));
-			logger.info("Created custom reactive datasource connection pool: {}", reactiveDsDefaultUrl);
-			// createAllTenantConnectionsSync();
+			logger.info("Created custom default reactive datasource connection pool: {}", reactiveDsDefaultUrl);
 			if (createTenantDatasourceAtStart) {
+				// All tenant databases are migrated as part of the client pool creation.
 				createAllTenantConnections(pgClient);
 			}
 		} catch (Exception e) {
 			logger.error("Error connecting to database: {}", reactiveDsDefaultUrl, e);
 			throw e;
 		}
+	}
+
+	public Uni<PgPool> getClient(String tenant, boolean create) {
+		if (tenant == null || AppConstants.INTERNAL_NULL_KEY.equals(tenant)) {
+			return tenant2Client.get(AppConstants.INTERNAL_NULL_KEY);
+		}
+		return tenant2Client.computeIfAbsent(tenant, t -> createTenantClient(t, create));
 	}
 
 	private String getClientPoolName(String tenant) {
@@ -143,7 +150,7 @@ public class ClientManager {
 
 	private void createAllTenantConnections(PgPool pool) {
 		logger.debug("Creating all reactive datasource pools");
-		pool.query("SELECT tenant_id, database_name FROM public.tenant").execute().await().atMost(Duration.ofSeconds(10)).spliterator().forEachRemaining(r ->
+		pool.query("SELECT tenant_id, database_name FROM public.tenant").execute().await().atMost(Duration.ofSeconds(10)).forEach(r ->
 			{
 				String tenant = r.getString("tenant_id");
 				try {
@@ -155,13 +162,6 @@ public class ClientManager {
 				}
 			}
 		);
-	}
-
-	public Uni<PgPool> getClient(String tenant, boolean create) {
-		if (tenant == null) {
-			return tenant2Client.get(AppConstants.INTERNAL_NULL_KEY);
-		}
-		return tenant2Client.computeIfAbsent(tenant, t -> createTenantClient(t, create)/*.onItem().transformToUni(c -> Uni.createFrom().item(c)); */);
 	}
 
 	private PgPool createPgPool(String poolName, String databaseUrl, boolean test) {
@@ -231,10 +231,6 @@ public class ClientManager {
 		return AgroalDataSource.from(configuration);
 	}
 
-	public ConcurrentMap<String, Uni<PgPool>> getAllClients() {
-		return tenant2Client;
-	}
-
 	private Uni<String> findDataBaseNameByTenantId(String tenant, boolean create) {
 		String databasename = "ngb" + tenant.hashCode();
 		String databasenameWithoutHash = "ngb" + tenant;
@@ -242,7 +238,7 @@ public class ClientManager {
 				.execute(Tuple.of(databasename, databasenameWithoutHash)).onItem().transformToUni(pgRowSet -> {
 					if (pgRowSet.size() == 0) {
 						if (create) {
-							return pgClient.preparedQuery("create database \"" + databasename + "\"").execute().onItem()
+							return pgClient.preparedQuery("CREATE DATABASE \"" + databasename + "\"").execute().onItem()
 									.transformToUni(t -> {
 										return storeTenantdata(tenant, databasename).onItem()
 												.transform(t2 -> databasename);
