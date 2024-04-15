@@ -204,6 +204,9 @@ public class ClientManager {
 			flywayMigrate(tenant, dbName);
 			PgPool pool = createPgPool(getClientPoolName(tenant), dbUrl, testDbConnection);
 			logger.info("Created reactive database client pool for tenant '{}': {}", tenant, dbUrl);
+			if (logger.isDebugEnabled()) {
+				Thread.dumpStack();
+			}
 			return pool;
 		} catch (SQLException e) {
 			logger.error("Client pool creation for tenant '{}' failed: Database migration error: {}", tenant, e);
