@@ -97,7 +97,7 @@ public class ClientManager {
 	@ConfigProperty(name = "pool.initialSize")
 	int initialSize;
 
-	@ConfigProperty(name = "ngsild.create-tenant-datasource-at-start", defaultValue = "true")
+	@ConfigProperty(name = "ngsild.create-tenant-datasource-at-start", defaultValue = "false")
 	boolean createTenantDatasourceAtStart;
 
 	@ConfigProperty(name = "ngsild.datasource-test_query", defaultValue = "SELECT 1")
