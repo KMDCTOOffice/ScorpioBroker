@@ -203,16 +203,17 @@ public class ClientManager {
 	}
 
 	private AgroalDataSource createDatasource(String jdbcURL) throws SQLException {
-		// TODO this needs to be from the config not hardcoded!!!
 		AgroalDataSourceConfigurationSupplier configuration = new AgroalDataSourceConfigurationSupplier()
-				.dataSourceImplementation(DataSourceImplementation.AGROAL).metricsEnabled(false)
-				.connectionPoolConfiguration(
-						cp -> cp.minSize(minsize).maxSize(maxsize).initialSize(initialSize)
-								.connectionFactoryConfiguration(cf -> cf.jdbcUrl(jdbcURL)
-										.connectionProviderClassName(jdbcDriver)
-										.autoCommit(false)
-										.principal(new NamePrincipal(username))
-										.credential(new SimplePassword(password))));
+			.dataSourceImplementation(DataSourceImplementation.AGROAL).metricsEnabled(false)
+			.connectionPoolConfiguration(
+				cp -> cp.minSize(minsize).maxSize(maxsize).initialSize(initialSize)
+					.connectionFactoryConfiguration(cf -> cf.jdbcUrl(jdbcURL)
+						.connectionProviderClassName(jdbcDriver)
+						.autoCommit(false)
+						.principal(new NamePrincipal(username))
+						.credential(new SimplePassword(password))
+					)
+			);
 		return AgroalDataSource.from(configuration);
 	}
 
@@ -251,10 +252,9 @@ public class ClientManager {
 	}
 
 	private void flywayMigrate(String tenant, String dbName) throws FlywayException, SQLException {
-		logger.debug("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
-		try (AgroalDataSource tenantDataSource = createDatasourceForTenant(tenant, dbName);) {
+		logger.info("Running database migration for tenant '{}' on database '{}'", tenant, dbName);
+		try (AgroalDataSource tenantDataSource = createDatasourceForTenant(tenant, dbName)) {
 			flywayMigrate(tenant, tenantDataSource);
-			logger.debug("Tenant '{}' database migration finished", tenant);
 		}
 	}
 
@@ -264,14 +264,16 @@ public class ClientManager {
 		Flyway flyway = flywayContainer.getFlyway();
 		try {
 			flyway.migrate();
+			logger.info("Tenant '{}' database migration finished", tenant);
 		} catch (FlywayException e) {
 			if (dbRepairAtStart) {
 				logger.warn("Tenant '{}' database migration failed, attempting repair.", tenant, e);
 				try {
 					flyway.repair();
 					flyway.migrate();
+					logger.info("Tenant '{}' database repair and migration finished", tenant);
 				} catch (FlywayException fe) {
-					logger.error("Tenant '{}' database repair and migration failed!", tenant, fe);
+					logger.error("Tenant '{}' database repair and migration failed: {}", tenant, fe.getMessage(), fe);
 					throw fe;
 				}
 			} else {

@@ -34,7 +34,8 @@ public class DBUtil {
 
 	private static final String JDBC_URI_PFX = "jdbc:";
 
-	public static GeoJSONReader geoReader = new GeoJSONReader(JtsSpatialContext.GEO, new SpatialContextFactory());
+	private static GeoJSONReader geoReader = new GeoJSONReader(JtsSpatialContext.GEO, new SpatialContextFactory());
+
 	public static String databaseURLFromPostgresJdbcUrl(String url, String newDbName) {
 		try {
 			URI baseUri = URI.create(url.replaceFirst("^"+JDBC_URI_PFX, ""));
@@ -42,7 +43,11 @@ public class DBUtil {
 			if (baseUri.getPort()!=-1) {
 				newUrl += ":" + baseUri.getPort();
 			}
-			newUrl += "/" + newDbName;
+			if (newDbName.contains(":")) {
+				newUrl += "/" + "{" + newDbName + "}";
+			} else {
+				newUrl += "/" + newDbName;
+			}
 			if (baseUri.getRawQuery()!=null) {
 				return newUrl + "?" + baseUri.getRawQuery();
 			}
