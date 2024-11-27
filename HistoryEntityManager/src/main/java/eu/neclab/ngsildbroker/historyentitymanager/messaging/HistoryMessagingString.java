@@ -7,7 +7,6 @@ import org.eclipse.microprofile.reactive.messaging.Incoming;
 import eu.neclab.ngsildbroker.commons.constants.AppConstants;
 import io.quarkus.arc.profile.IfBuildProfile;
 import io.quarkus.scheduler.Scheduled;
-import io.smallrye.common.annotation.RunOnVirtualThread;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Singleton;
 
@@ -27,21 +26,9 @@ public class HistoryMessagingString extends HistoryMessagingBase {
 		return handleEntityRaw(byteMessage);
 	}
 
-	@Incoming(AppConstants.ENTITY_BATCH_RETRIEVE_CHANNEL)
-	@Acknowledgment(Strategy.PRE_PROCESSING)
-	public Uni<Void> handleBatchEntities(String byteMessage) {
-		return handleBatchEntitiesRaw(byteMessage);
-	}
-
-	@Scheduled(every = "20s", delayed = "${scorpio.startupdelay}")
-	void purge() {
-		super.purge();
-	}
-
 	@Scheduled(every = "5s", delayed = "${scorpio.startupdelay}")
-	@RunOnVirtualThread
-	Uni<Void> checkBuffer() {
-		return super.checkBuffer();
+	void checkBuffer() {
+		super.checkBuffer();
 	}
 
 }

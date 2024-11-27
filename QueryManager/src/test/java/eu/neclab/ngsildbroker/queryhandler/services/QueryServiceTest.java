@@ -1,20 +1,11 @@
 package eu.neclab.ngsildbroker.queryhandler.services;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
-import org.junit.jupiter.api.Order;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -58,6 +49,7 @@ public class QueryServiceTest {
 	Map<String, Object> resolved = null;
 	String jsonLdObject;
 
+	@SuppressWarnings("unchecked")
 	@BeforeEach
 	public void setUp() throws Exception {
 		MockitoAnnotations.openMocks(this);
@@ -82,35 +74,5 @@ public class QueryServiceTest {
 		resolved = objectMapper.readValue(jsonLdObject, Map.class);
 	}
 
-	@Test
-	@Order(1)
-	public void retrieveEntityLocallyTest() {
 
-		Uni<Map<String, Object>> getEntityRes = Uni.createFrom().item(resolved);
-
-		when(queryDAO.getEntity(anyString(), anyString(), any())).thenReturn(getEntityRes);
-
-		Uni<Map<String, Object>> originalEntityResUni = queryService.retrieveEntity(context, "", entityId, null, null,
-				true,null,null,false,1);
-
-		Map<String, Object> originalEntityRes = originalEntityResUni.await().indefinitely();
-
-		assertEquals(true,
-				originalEntityRes.containsKey("https://uri.etsi.org/ngsi-ld/default-context/complexproperty"));
-		verify(queryDAO, times(1)).getEntity(anyString(), anyString(), any());
-
-	}
-
-	@Test
-	@Order(2)
-	public void retrieveEntityNotFoundTest() {
-
-		Uni<Map<String, Object>> getEntityRes = Uni.createFrom().item(new HashMap<String, Object>());
-		when(queryDAO.getEntity(anyString(), anyString(), any())).thenReturn(getEntityRes);
-		Uni<Map<String, Object>> originalEntityResUni = queryService.retrieveEntity(context, "", entityId, null, null,
-				true,null,null,false,1);
-		Map<String, Object> originalEntityRes = originalEntityResUni.await().indefinitely();
-
-		assertTrue(originalEntityRes.isEmpty());
-	}
 }

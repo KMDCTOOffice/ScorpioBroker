@@ -76,6 +76,7 @@ public class SubscriptionServiceTest {
 	String tenant = "test";
 	HeadersMultiMap link = new HeadersMultiMap();
 
+	@SuppressWarnings("unchecked")
 	@BeforeEach
 	public void setUp() throws Exception {
 		MockitoAnnotations.openMocks(this);
@@ -93,14 +94,14 @@ public class SubscriptionServiceTest {
 	@Test
 	public void createSubscriptionTest() {
 
-		RowSet<Row> rowSetMock = mock(RowSet.class);
+		
 
 		when(subDAO.createSubscription(any(), any())).thenReturn(Uni.createFrom().voidItem());
 
 		Uni<Void> uniEmiiterResponse = Uni.createFrom().nullItem();
 		when(internalSubEmitter.send(any(SubscriptionRequest.class))).thenReturn(uniEmiiterResponse);
 
-		Uni<NGSILDOperationResult> uniResult = subscriptionService.createSubscription(link,tenant, resolved, context);
+		Uni<NGSILDOperationResult> uniResult = subscriptionService.createSubscription(link,tenant, resolved, context, null);
 		NGSILDOperationResult result = uniResult.await().indefinitely();
 
 		assertEquals(subscriptionId, result.getEntityId());
@@ -116,7 +117,7 @@ public class SubscriptionServiceTest {
 		PgException sqlException = new PgException("duplicate key value violates unique constraint", "", "23505", "");
 		when(subDAO.createSubscription(any(), any())).thenReturn(Uni.createFrom().failure(sqlException));
 
-		Uni<NGSILDOperationResult> uniResult = subscriptionService.createSubscription(link,tenant, resolved, context);
+		Uni<NGSILDOperationResult> uniResult = subscriptionService.createSubscription(link,tenant, resolved, context, null);
 
 		Throwable throwable = assertThrows(CompletionException.class, () -> uniResult.await().indefinitely());
 		ResponseException responseException = (ResponseException) throwable.getCause();
@@ -127,6 +128,7 @@ public class SubscriptionServiceTest {
 
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void updateSubscriptionNotFoundTest() {
 
@@ -141,7 +143,7 @@ public class SubscriptionServiceTest {
 		when(internalSubEmitter.send(any(SubscriptionRequest.class))).thenReturn(uniEmiiterResponse);
 
 		Uni<NGSILDOperationResult> uniResult = subscriptionService.updateSubscription(tenant, subscriptionId, resolved,
-				context);
+				context, null);
 
 		Throwable throwable = assertThrows(CompletionException.class, () -> uniResult.await().indefinitely());
 		ResponseException responseException = (ResponseException) throwable.getCause();
@@ -152,6 +154,7 @@ public class SubscriptionServiceTest {
 
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void deleteSubscriptionTest() {
 
@@ -169,6 +172,7 @@ public class SubscriptionServiceTest {
 		verify(subDAO, times(1)).deleteSubscription(any(DeleteSubscriptionRequest.class));
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void getSubscriptionTest() {
 
@@ -192,6 +196,7 @@ public class SubscriptionServiceTest {
 
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void getSubscriptionNotFoundTest() {
 
@@ -211,6 +216,7 @@ public class SubscriptionServiceTest {
 
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void getAllSubscriptionsTest() {
 
@@ -235,6 +241,7 @@ public class SubscriptionServiceTest {
 
 	}
 
+	@SuppressWarnings("unchecked")
 	@Test
 	public void getAllSubscriptionsEmptyResultTest() {
 

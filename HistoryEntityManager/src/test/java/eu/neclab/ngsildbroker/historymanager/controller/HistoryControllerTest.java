@@ -16,7 +16,8 @@ import eu.neclab.ngsildbroker.commons.datatypes.results.NGSILDOperationResult;
 import eu.neclab.ngsildbroker.historyentitymanager.service.HistoryEntityService;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
-import io.quarkus.test.junit.mockito.InjectMock;
+
+import io.quarkus.test.junit.mockito.MockitoConfig;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 import io.smallrye.mutiny.Uni;
@@ -30,9 +31,9 @@ public class HistoryControllerTest {
     private String temporalPayloadBad;
     private String temporalPayload;
     private String addAttrsPayload;
-    private String payload;
+    
 
-    @InjectMock
+    @MockitoConfig
     private HistoryEntityService historyEntityService;
 
     @BeforeEach
@@ -60,7 +61,7 @@ public class HistoryControllerTest {
                 + "            \"instanceId\": \"urn:ngsi-ld:0afa5d4c-3ca7-4d2e-96c9-99a437a849dc\"\r\n"
                 + "        }\r\n" + "    ]\r\n" + "}";
 
-        payload = "";
+        
 
         addAttrsPayload = "{\r\n" + "    \"airQualityLevel1\": [\r\n" + "        {\r\n"
                 + "            \"type\": \"Property\",\r\n" + "            \"value\": \"good\",\r\n"
@@ -71,7 +72,7 @@ public class HistoryControllerTest {
     @AfterEach
     public void tearDown() {
         temporalPayload = null;
-        payload = null;
+        
         temporalPayloadBad = null;
         addAttrsPayload = null;
     }
@@ -82,7 +83,7 @@ public class HistoryControllerTest {
     @Test
     public void createTemporalEntityTest() throws Exception {
 
-        Mockito.when(historyEntityService.createEntry(any(), any(), any()))
+        Mockito.when(historyEntityService.createEntry(any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.CREATE_REQUEST, "urn:test:testentity1")));
         ExtractableResponse<Response> response = given().body(temporalPayload)
                 .header(HttpHeaders.CONTENT_TYPE, AppConstants.NGB_APPLICATION_JSON)
@@ -100,7 +101,7 @@ public class HistoryControllerTest {
     @Test
     public void createTemporalEntityBadRequestTest() throws Exception {
 
-        Mockito.when(historyEntityService.createEntry(any(), any(), any()))
+        Mockito.when(historyEntityService.createEntry(any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.CREATE_REQUEST, "urn:test:testentity1")));
         ExtractableResponse<Response> response = given().body(temporalPayloadBad)
                 .header(HttpHeaders.CONTENT_TYPE, AppConstants.NGB_APPLICATION_JSON)
@@ -119,7 +120,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void deleteTemporalEntityTest() throws Exception {
-        Mockito.when(historyEntityService.deleteEntry(any(), any(), any()))
+        Mockito.when(historyEntityService.deleteEntry(any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -137,7 +138,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void deleteTemporalEntityBadRequestTest() throws Exception {
-        Mockito.when(historyEntityService.deleteEntry(any(), any(), any()))
+        Mockito.when(historyEntityService.deleteEntry(any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -155,7 +156,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void deleteTemporalEntityByAttrTest() throws Exception {
-        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any()))
+        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -173,7 +174,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void deleteTemporalEntityByAttrBadRequestTest() {
-        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any()))
+        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -192,7 +193,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void addAttrib2TemopralEntityTest() throws Exception {
-        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any()))
+        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -212,7 +213,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void addAttrib2TemopralEntityBadRequestTest() {
-        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any()))
+        Mockito.when(historyEntityService.appendToEntry(any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -234,7 +235,7 @@ public class HistoryControllerTest {
     @Test
     @Order(17)
     public void modifyAttribInstanceTemporalEntityTest() throws Exception {
-        Mockito.when(historyEntityService.updateInstanceOfAttr(any(), any(), any(), any(), any(), any()))
+        Mockito.when(historyEntityService.updateInstanceOfAttr(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -254,7 +255,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void modifyAttribInstanceTemporalEntityBadRequestTest() throws Exception {
-        Mockito.when(historyEntityService.updateInstanceOfAttr(any(), any(), any(), any(), any(), any()))
+        Mockito.when(historyEntityService.updateInstanceOfAttr(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -274,7 +275,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void deleteAtrribInstanceTemporalEntityTest() throws Exception {
-        Mockito.when(historyEntityService.deleteInstanceOfAttr(any(), any(), any(), any(), any()))
+        Mockito.when(historyEntityService.deleteInstanceOfAttr(any(), any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()
@@ -293,7 +294,7 @@ public class HistoryControllerTest {
      */
     @Test
     public void deleteAtrribInstanceTemporalEntityBadRequestTest() throws Exception {
-        Mockito.when(historyEntityService.deleteInstanceOfAttr(any(), any(), any(), any(), any()))
+        Mockito.when(historyEntityService.deleteInstanceOfAttr(any(), any(), any(), any(), any(), any()))
                 .thenReturn(Uni.createFrom().item(new NGSILDOperationResult(AppConstants.DELETE_REQUEST, "urn:ngsi-ld:testunit:a0a")));
 
         ExtractableResponse<Response> response = given()

@@ -3,18 +3,18 @@
 	<groupId>eu.neclab.ngsildbroker</groupId>
 	<artifactId>broker-parent</artifactId>
 	<name>BrokerParent</name>
-	<version>4.1.15-SNAPSHOT</version>
+	<version>5.0.3-SNAPSHOT</version>
 	<packaging>pom</packaging>
 	<properties>
-		<compiler-plugin.version>3.11.0</compiler-plugin.version>
+		<compiler-plugin.version>3.13.0</compiler-plugin.version>
 		<failsafe.useModulePath>false</failsafe.useModulePath>
 		<maven.compiler.release>17</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
 		<quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-		<quarkus.platform.version>3.2.7.Final</quarkus.platform.version>
-		<surefire-plugin.version>3.1.2</surefire-plugin.version>
+		<quarkus.platform.version>3.14.1</quarkus.platform.version>
+		<surefire-plugin.version>3.3.1</surefire-plugin.version>
 		<java.version>17</java.version>
 		<maven.compiler.source>${java.version}</maven.compiler.source>
 		<maven.compiler.target>${java.version}</maven.compiler.target>
@@ -47,9 +47,9 @@
 				</configuration>
 			</plugin>
 			<plugin>
-				<groupId>org.jboss.jandex</groupId>
+				<groupId>io.smallrye</groupId>
 				<artifactId>jandex-maven-plugin</artifactId>
-				<version>1.2.3</version>
+				<version>3.1.2</version>
 				<executions>
 					<execution>
 						<id>make-index</id>
@@ -81,8 +81,20 @@
 				<scope>import</scope>
 			</dependency>
 			<dependency>
+				<groupId>${quarkus.platform.group-id}</groupId>
+				<artifactId>quarkus-camel-bom</artifactId>
+				<version>${quarkus.platform.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
 				<groupId>eu.neclab.ngsildbroker</groupId>
 				<artifactId>commons</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>eu.neclab.ngsildbroker</groupId>
+				<artifactId>sns-fanout-messaging</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 		</dependencies>
@@ -144,7 +156,7 @@
 		</dependency>
 		<dependency>
 			<groupId>io.quarkus</groupId>
-			<artifactId>quarkus-resteasy-reactive</artifactId>
+			<artifactId>quarkus-rest</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.quarkus</groupId>
@@ -167,7 +179,7 @@
 		</dependency>
 		<dependency>
 			<groupId>io.quarkus</groupId>
-			<artifactId>quarkus-resteasy-reactive-jackson</artifactId>
+			<artifactId>quarkus-rest-jackson</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>io.quarkus</groupId>
@@ -180,7 +192,7 @@
 		<dependency>
 			<groupId>io.quarkiverse.loggingmanager</groupId>
 			<artifactId>quarkus-logging-manager</artifactId>
-			<version>3.0.0</version>
+			<version>3.1.2</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
@@ -192,12 +204,11 @@
 		</dependency>
 		<dependency>
 			<groupId>io.quarkus</groupId>
-			<artifactId>quarkus-smallrye-reactive-messaging</artifactId>
+			<artifactId>quarkus-messaging</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.camel.quarkus</groupId>
 			<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-			<version>3.2.0</version>
 		</dependency>
 		<dependency>
 			<groupId>io.smallrye.reactive</groupId>
@@ -205,10 +216,51 @@
 		</dependency>
 		<dependency>
 			<groupId>io.quarkus</groupId>
-			<artifactId>quarkus-smallrye-reactive-messaging-kafka</artifactId>
+			<artifactId>quarkus-messaging-kafka</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.quarkus</groupId>
+			<artifactId>quarkus-container-image-docker</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.quarkiverse.systemd.notify</groupId>
+			<artifactId>quarkus-systemd-notify</artifactId>
+			<version>1.0.2</version>
 		</dependency>
 	</dependencies>
 	<profiles>
+		<profile>
+			<id>macos</id>
+			<activation>
+				<property>
+					<name>macos</name>
+				</property>
+			</activation>
+			<dependencies>
+				<!-- https://mvnrepository.com/artifact/io.netty/netty-resolver-dns-native-macos -->
+				<dependency>
+					<groupId>io.netty</groupId>
+					<artifactId>netty-resolver-dns-native-macos</artifactId>
+					<version>4.1.112.Final</version>
+					<scope>runtime</scope>
+				</dependency>
+			</dependencies>
+		</profile>
+		<profile>
+			<id>jfr</id>
+			<activation>
+				<property>
+					<name>jfr</name>
+				</property>
+			</activation>
+			<dependencies>
+				<!-- https://mvnrepository.com/artifact/io.netty/netty-resolver-dns-native-macos -->
+				<dependency>
+					<groupId>io.quarkus</groupId>
+					<artifactId>quarkus-jfr</artifactId>
+				</dependency>
+			</dependencies>
+		</profile>
 		<profile>
 			<id>in-memory</id>
 			<activation>
@@ -233,7 +285,7 @@
 			<dependencies>
 				<dependency>
 					<groupId>io.quarkus</groupId>
-					<artifactId>quarkus-smallrye-reactive-messaging-kafka</artifactId>
+					<artifactId>quarkus-messaging-kafka</artifactId>
 				</dependency>
 				<dependency>
 					<groupId>io.strimzi</groupId>
@@ -252,27 +304,27 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-paho-mqtt5</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-log</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-jackson</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-dataformat</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 			</dependencies>
 		</profile>
@@ -287,22 +339,17 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-					<version>3.2.0</version>
-				</dependency>
-				<dependency>
-					<groupId>org.apache.camel.quarkus</groupId>
-					<artifactId>camel-quarkus-aws2-sqs</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-log</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-aws2-kinesis</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 			</dependencies>
 		</profile>
@@ -317,17 +364,17 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.ap/ache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-jackson</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-amqp</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 			</dependencies>
 		</profile>
@@ -342,17 +389,17 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-activemq</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel</groupId>
 					<artifactId>camel-jms</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<!--<dependency>
 					<groupId>org.apache.activemq</groupId>
@@ -362,17 +409,17 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-log</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-jackson</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-dataformat</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 			</dependencies>
 		</profile>
@@ -387,12 +434,12 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-azure-eventhubs</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 			</dependencies>
 		</profile>
@@ -407,29 +454,29 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 
 
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-google-pubsub</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-log</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-jackson</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-dataformat</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 			</dependencies>
 		</profile>
@@ -444,12 +491,12 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-smallrye-reactive-messaging</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-log</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
@@ -459,12 +506,12 @@
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-jackson</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 				<dependency>
 					<groupId>org.apache.camel.quarkus</groupId>
 					<artifactId>camel-quarkus-dataformat</artifactId>
-					<version>3.2.0</version>
+					
 				</dependency>
 			</dependencies>
 		</profile>
@@ -499,7 +546,8 @@
 				</plugins>
 			</build>
 			<properties>
-				<quarkus.package.type>native</quarkus.package.type>
+				<quarkus.native.enabled>true</quarkus.native.enabled>
+				<quarkus.native.container-build>true</quarkus.native.container-build>
 			</properties>
 		</profile>
 		<profile>

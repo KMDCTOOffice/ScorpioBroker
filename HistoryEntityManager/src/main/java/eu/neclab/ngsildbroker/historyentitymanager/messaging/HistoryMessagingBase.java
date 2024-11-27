@@ -1,30 +1,29 @@
 package eu.neclab.ngsildbroker.historyentitymanager.messaging;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import eu.neclab.ngsildbroker.commons.constants.AppConstants;
-import eu.neclab.ngsildbroker.commons.constants.NGSIConstants;
 import eu.neclab.ngsildbroker.commons.datatypes.requests.BaseRequest;
 import eu.neclab.ngsildbroker.commons.datatypes.requests.BatchRequest;
+import eu.neclab.ngsildbroker.commons.datatypes.requests.CSourceBaseRequest;
 import eu.neclab.ngsildbroker.commons.datatypes.requests.DeleteEntityRequest;
 import eu.neclab.ngsildbroker.commons.datatypes.requests.UpsertEntityRequest;
-import eu.neclab.ngsildbroker.commons.serialization.messaging.CollectMessageListener;
-import eu.neclab.ngsildbroker.commons.serialization.messaging.MessageCollector;
 import eu.neclab.ngsildbroker.historyentitymanager.service.HistoryEntityService;
-import io.netty.channel.EventLoopGroup;
 //import eu.neclab.ngsildbroker.historyentitymanager.service.HistoryEntityService;
 import io.smallrye.mutiny.Uni;
 import io.vertx.mutiny.core.Vertx;
@@ -42,9 +41,12 @@ public abstract class HistoryMessagingBase {
 
 	@ConfigProperty(name = "scorpio.history.autorecording", defaultValue = "true")
 	boolean autoRecording;
+	
+	@ConfigProperty(name = "scorpio.history.autorecordingthreadpoolsize", defaultValue = "1")
+	int histRecordingThreadPooolSzie;
+	
 	@ConfigProperty(name = "scorpio.history.autorecordingbuffersize", defaultValue = "50000")
 	int maxSize;
-	private MessageCollector collector = new MessageCollector(this.getClass().getName());
 
 	int instancesNr = 1;
 	int myInstancePos = 1;
@@ -54,80 +56,55 @@ public abstract class HistoryMessagingBase {
 
 	@Inject
 	ObjectMapper objectMapper;
-
-	private EventLoopGroup executor;
-
+	
+	
+	Executor histRecordingExecutor;
+	
 	@PostConstruct
 	public void setup() {
-		this.executor = vertx.getDelegate().nettyEventLoopGroup();
+		if(autoRecording) {
+			histRecordingExecutor = Executors.newScheduledThreadPool(histRecordingThreadPooolSzie);
+		}
 	}
-
-	CollectMessageListener collectListenerEntity = new CollectMessageListener() {
-
-		@Override
-		public void collected(String byteMessage) {
-			BaseRequest message;
-			try {
-				message = objectMapper.readValue(byteMessage, BaseRequest.class);
-			} catch (IOException e) {
-				logger.error("failed to read sync message", e);
-				return;
-			}
-			baseHandleEntity(message).runSubscriptionOn(executor).subscribe()
-					.with(v -> logger.debug("done handling entity"));
-		}
-	};
-
-	CollectMessageListener collectListenerBatchEntity = new CollectMessageListener() {
-
-		@Override
-		public void collected(String byteMessage) {
-			BatchRequest message;
-			try {
-				message = objectMapper.readValue(byteMessage, BatchRequest.class);
-			} catch (IOException e) {
-				logger.error("failed to read sync message", e);
-				return;
-			}
-			baseHandleBatch(message).runSubscriptionOn(executor).subscribe()
-					.with(v -> logger.debug("done handling batch"));
-		}
-	};
-
-	CollectMessageListener collectListenerRegistry = new CollectMessageListener() {
-
-		@Override
-		public void collected(String byteMessage) {
-			BaseRequest message;
-			try {
-				message = objectMapper.readValue(byteMessage, BaseRequest.class);
-			} catch (IOException e) {
-				logger.error("failed to read sync message", e);
-				return;
-			}
-			baseHandleCsource(message).runSubscriptionOn(executor).subscribe()
-					.with(v -> logger.debug("done handling registry"));
-		}
-	};
+	
 
 	public Uni<Void> handleCsourceRaw(String byteMessage) {
-		collector.collect(byteMessage, collectListenerRegistry);
-		return Uni.createFrom().voidItem();
+		CSourceBaseRequest baseRequest;
+		try {
+			baseRequest = objectMapper.readValue(byteMessage, CSourceBaseRequest.class);
+		} catch (JsonProcessingException e) {
+			logger.error("failed to serialize message " + byteMessage, e);
+			return Uni.createFrom().voidItem();
+		}
+		return baseHandleCsource(baseRequest);
+
 	}
 
 	public Uni<Void> handleEntityRaw(String byteMessage) {
-		collector.collect(byteMessage, collectListenerEntity);
-		return Uni.createFrom().voidItem();
-	}
+		BaseRequest baseRequest;
+		try {
+			baseRequest = objectMapper.readValue(byteMessage, BaseRequest.class);
+		} catch (JsonProcessingException e) {
+			logger.error("failed to serialize message " + byteMessage, e);
+			return Uni.createFrom().voidItem();
+		}
+		if (baseRequest.getRequestType() >= 30) {
+			return baseHandleBatch(baseRequest);
+		} else {
+			return baseHandleEntity(baseRequest);
+		}
 
-	public Uni<Void> handleBatchEntitiesRaw(String byteMessage) {
-		collector.collect(byteMessage, collectListenerBatchEntity);
-		return Uni.createFrom().voidItem();
 	}
 
 	public Uni<Void> baseHandleEntity(BaseRequest message) {
-
+		logger.debug("retrieving " + message.getFirstId());
 		if (!autoRecording || (instancesNr > 1 && message.hashCode() % instancesNr != myInstancePos)) {
+			logger.debug("debug " + message.getFirstId());
+			logger.debug("auto recording: " + autoRecording);
+			logger.debug("instancesNr: " + instancesNr);
+			logger.debug("myInstancePos: " + myInstancePos);
+			logger.debug("message.hashCode() % instancesNr: " + (message.hashCode() % instancesNr));
+
 			return Uni.createFrom().voidItem();
 		}
 		String tenant = message.getTenant();
@@ -138,57 +115,76 @@ public abstract class HistoryMessagingBase {
 		}
 		buffer.add(message);
 		tenant2LastReceived.put(tenant, System.currentTimeMillis());
-		logger.debug("history manager got called for entity: " + message.getId());
+		logger.debug("history manager got called for entity: " + message.getIds());
 		return Uni.createFrom().voidItem();
 	}
 
-	public Uni<Void> baseHandleBatch(BatchRequest message) {
+	public Uni<Void> baseHandleBatch(BaseRequest message) {
+		logger.debug("retrieving message with id" + message.getIds());
 		if (!autoRecording || (instancesNr > 1 && message.hashCode() % instancesNr != myInstancePos)) {
+			logger.debug("discarding " + message.getIds());
+			logger.debug("auto recording: " + autoRecording);
+			logger.debug("instancesNr: " + instancesNr);
+			logger.debug("myInstancePos: " + myInstancePos);
 			return Uni.createFrom().voidItem();
 		}
-		logger.debug("history manager batch handling got called: with ids: " + message.getEntityIds());
-		if (message.getRequestType() != AppConstants.DELETE_REQUEST && message.getRequestPayload().isEmpty()) {
+
+		if (message.getRequestType() != AppConstants.DELETE_REQUEST
+				&& message.getRequestType() != AppConstants.BATCH_DELETE_REQUEST
+				&& (message.getPayload() == null || message.getPayload().isEmpty())) {
+			logger.debug("discarding because of none delete request and empty body");
 			return Uni.createFrom().voidItem();
 		}
 		String tenant = message.getTenant();
+
 		ConcurrentLinkedQueue<BaseRequest> buffer = tenant2Buffer.get(tenant);
 		if (buffer == null) {
 			buffer = new ConcurrentLinkedQueue<>();
-			tenant2Buffer.put(message.getTenant(), buffer);
+			tenant2Buffer.put(tenant, buffer);
 		}
-
 		tenant2LastReceived.put(tenant, System.currentTimeMillis());
-		if (message.getRequestType() == AppConstants.DELETE_REQUEST) {
-			for (String entry : message.getEntityIds()) {
-				buffer.add(new DeleteEntityRequest(tenant, entry));
+		if (message.getRequestType() == AppConstants.DELETE_REQUEST
+				|| message.getRequestType() == AppConstants.BATCH_DELETE_REQUEST) {
+			for (String entry : message.getIds()) {
+				buffer.add(new DeleteEntityRequest(tenant, entry, false));
 			}
 		} else {
-			for (Map<String, Object> entry : message.getRequestPayload()) {
-				buffer.add(new UpsertEntityRequest(tenant, entry));
+			for (List<Map<String, Object>> entry : message.getPayload().values()) {
+				for (Map<String, Object> value : entry) {
+					buffer.add(new UpsertEntityRequest(tenant, value, false));
+				}
 			}
 		}
 		return Uni.createFrom().voidItem();
 	}
 
-	public Uni<Void> baseHandleCsource(BaseRequest message) {
+	public Uni<Void> baseHandleCsource(CSourceBaseRequest message) {
 		logger.debug("history manager got called for csource: " + message.getId());
 		return historyService.handleRegistryChange(message);
 	}
 
-	Uni<Void> checkBuffer() {
+	void checkBuffer() {
 		if (!autoRecording) {
-			return Uni.createFrom().voidItem();
+			return;
 		}
 		List<Uni<Void>> unis = Lists.newArrayList();
+
 		for (Entry<String, ConcurrentLinkedQueue<BaseRequest>> tenant2BufferEntry : tenant2Buffer.entrySet()) {
 			ConcurrentLinkedQueue<BaseRequest> buffer = tenant2BufferEntry.getValue();
 			String tenant = tenant2BufferEntry.getKey();
+
 			Long lastReceived = tenant2LastReceived.get(tenant);
+			if(lastReceived == null) {
+				lastReceived = -1l;
+			}
+
 			if (buffer.size() >= maxSize || (lastReceived < System.currentTimeMillis() - 1000 && !buffer.isEmpty())) {
-				Map<Integer, List<Map<String, Object>>> opType2Payload = Maps.newHashMap();
+				Map<Integer, Map<String, List<Map<String, Object>>>> opType2Payload = Maps.newHashMap();
 				List<BaseRequest> notBatch = Lists.newArrayList();
 				while (!buffer.isEmpty()) {
+
 					BaseRequest request = buffer.poll();
+
 					if (request.getRequestType() == AppConstants.DELETE_ATTRIBUTE_REQUEST
 							|| request.getRequestType() == AppConstants.REPLACE_ATTRIBUTE_REQUEST
 							|| request.getRequestType() == AppConstants.REPLACE_ENTITY_REQUEST
@@ -197,21 +193,65 @@ public abstract class HistoryMessagingBase {
 						notBatch.add(request);
 						continue;
 					}
-					List<Map<String, Object>> payloads = opType2Payload.get(request.getRequestType());
+					int regTypeToUse;
+
+					switch (request.getRequestType()) {
+					case AppConstants.UPSERT_REQUEST:
+						regTypeToUse = AppConstants.BATCH_UPSERT_REQUEST;
+						break;
+					case AppConstants.CREATE_REQUEST:
+						regTypeToUse = AppConstants.BATCH_CREATE_REQUEST;
+						break;
+
+					case AppConstants.APPEND_REQUEST:
+					case AppConstants.UPDATE_REQUEST:
+						regTypeToUse = AppConstants.BATCH_UPDATE_REQUEST;
+						break;
+
+					case AppConstants.MERGE_PATCH_REQUEST:
+						regTypeToUse = AppConstants.BATCH_MERGE_REQUEST;
+						break;
+
+					case AppConstants.DELETE_REQUEST:
+						regTypeToUse = AppConstants.BATCH_DELETE_REQUEST;
+						break;
+
+					default:
+						continue;
+					}
+
+					Map<String, List<Map<String, Object>>> payloads = opType2Payload.get(regTypeToUse);
 					if (payloads == null) {
-						payloads = Lists.newArrayList();
-						opType2Payload.put(request.getRequestType(), payloads);
+						payloads = Maps.newHashMap();
+						opType2Payload.put(regTypeToUse, payloads);
 					}
-					Map<String, Object> payload = request.getPayload();
-					if (payload == null) {
-						payload = Maps.newHashMap();
+					if (regTypeToUse == AppConstants.BATCH_DELETE_REQUEST) {
+						for (String id : request.getIds()) {
+							payloads.put(id, null);
+						}
+					} else {
+						Map<String, List<Map<String, Object>>> payload = request.getPayload();
+						for (Entry<String, List<Map<String, Object>>> pEntry : payload.entrySet()) {
+							List<Map<String, Object>> tmp = payloads.get(pEntry.getKey());
+							if (tmp == null) {
+								tmp = Lists.newArrayList();
+								payloads.put(pEntry.getKey(), tmp);
+							}
+							tmp.addAll(pEntry.getValue());
+						}
 					}
-					payload.put(NGSIConstants.JSON_LD_ID, request.getId());
-					payloads.add(payload);
+
 				}
-				for (Entry<Integer, List<Map<String, Object>>> entry : opType2Payload.entrySet()) {
-					unis.add(historyService.handleInternalBatchRequest(
-							new BatchRequest(tenant, entry.getValue(), null, entry.getKey())));
+
+				for (Entry<Integer, Map<String, List<Map<String, Object>>>> entry : opType2Payload.entrySet()) {
+					if (entry.getKey() == AppConstants.BATCH_DELETE_REQUEST) {
+						unis.add(historyService.handleInternalBatchRequest(
+								new BatchRequest(tenant, entry.getValue().keySet(), null, entry.getKey(), false)));
+					} else {
+						unis.add(historyService.handleInternalBatchRequest(new BatchRequest(tenant,
+								entry.getValue().keySet(), entry.getValue(), entry.getKey(), false)));
+					}
+
 				}
 				for (BaseRequest entry : notBatch) {
 					unis.add(historyService.handleInternalRequest(entry));
@@ -219,15 +259,16 @@ public abstract class HistoryMessagingBase {
 
 			}
 		}
-		if (unis.isEmpty()) {
-			return Uni.createFrom().voidItem();
-		}
-		return Uni.combine().all().unis(unis).combinedWith(list -> null).onItem()
-				.transformToUni(list -> Uni.createFrom().voidItem());
-	}
 
-	void purge() {
-		collector.purge(30000);
+		if (unis.isEmpty()) {
+			return;
+		}
+
+		Uni.combine().all().unis(unis).with(list -> null).onItem().transformToUni(list -> {
+			return Uni.createFrom().voidItem();
+		}).runSubscriptionOn(histRecordingExecutor).subscribe().with(v -> {
+			logger.debug("running hist recording on threadpool");
+		});
 	}
 
 	public int getInstancesNr() {
@@ -245,9 +286,5 @@ public abstract class HistoryMessagingBase {
 	public void setMyInstancePos(int myInstancePos) {
 		this.myInstancePos = myInstancePos;
 	}
-	
-	
-
-	
 
 }

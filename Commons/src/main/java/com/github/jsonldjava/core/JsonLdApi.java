@@ -17,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -768,8 +767,10 @@ public class JsonLdApi {
 								.setFromHasValue(ngsiElement.isHasAtValue() || ngsiElement.isFromHasValue()),
 						payloadType, atContextAllowed, webClient,atContextUrl));
 			}
-
-			return Uni.combine().all().unis(unis).combinedWith(list -> list).onItem().transformToUni(list -> {
+			if(unis.isEmpty()) {
+				return Uni.createFrom().item(ngsiElement);
+			}
+			return Uni.combine().all().unis(unis).with(list -> list).onItem().transformToUni(list -> {
 				final List<Object> result = new ArrayList<Object>();
 				// 3.2)
 				NGSIObject resultElement = new NGSIObject(null, ngsiElement);
@@ -1005,11 +1006,10 @@ public class JsonLdApi {
 							// compacted version and should not be expanded
 							// expandedValue = activeCtx.expandIri((String) value, true, false, null, null);
 
-							expandedValue = value;
-
-							if (((String) expandedValue).indexOf(':') == -1 && !ngsiElement.isFromHasValue()) {
+							if (!((String) value).contains(":") && !ngsiElement.isFromHasValue()) {
 								throw new ResponseException(ErrorType.BadRequestData, "IDs need to be URIs");
 							}
+							expandedValue = activeCtx.expandIri((String) value, true, false, null, null);
 
 							// NGSICOMMENT: LD at the moment has no scenario where ids are arrays if this
 							// changes this needs to be updated
@@ -1248,7 +1248,7 @@ public class JsonLdApi {
 					case AppConstants.TEMP_ENTITY_CREATE_PAYLOAD:
 					case AppConstants.TEMP_ENTITY_UPDATE_PAYLOAD:
 					case AppConstants.TEMP_ENTITY_RETRIEVED_PAYLOAD:
-						if (NGSIConstants.NGSI_LD_HAS_VALUE.equals(expandedProperty)) {
+						if (NGSIConstants.NGSI_LD_HAS_VALUE.equals(expandedProperty) || NGSIConstants.NGSI_LD_HAS_LIST.equals(expandedProperty)) {
 							ngsiElement.setHasAtValue(true);
 						} else if (NGSIConstants.NGSI_LD_HAS_VOCAB.equals(expandedProperty)) {
 							ngsiElement.setHasVocab(true);

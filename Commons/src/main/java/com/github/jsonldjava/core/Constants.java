@@ -10,6 +10,7 @@ public class Constants {
 	static {
 		allowedDateTimes.put(AppConstants.ENTITY_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_OBSERVED_AT);
 		allowedDateTimes.put(AppConstants.ENTITY_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_OBSERVED_AT);
+		allowedDateTimes.put(AppConstants.MERGE_PATCH_PAYLOAD, NGSIConstants.NGSI_LD_OBSERVED_AT);
 		allowedDateTimes.put(AppConstants.ENTITY_ATTRS_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_OBSERVED_AT);
 		allowedDateTimes.put(AppConstants.ENTITY_RETRIEVED_PAYLOAD, NGSIConstants.NGSI_LD_OBSERVED_AT);
 		allowedDateTimes.put(AppConstants.ENTITY_RETRIEVED_PAYLOAD, NGSIConstants.NGSI_LD_CREATED_AT);
@@ -60,6 +61,8 @@ public class Constants {
 		allowedScalars.put(AppConstants.SUBSCRIPTION_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_SCOPE_Q);
 		allowedScalars.put(AppConstants.SUBSCRIPTION_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_LOCALONLY);
 		allowedScalars.put(AppConstants.SUBSCRIPTION_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_NOTIFICATION_TRIGGER);
+		allowedScalars.put(AppConstants.SUBSCRIPTION_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_PICK);
+		allowedScalars.put(AppConstants.SUBSCRIPTION_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_OMIT);
 
 		allowedScalars.put(AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_SUBSCRIPTION_NAME);
 		allowedScalars.put(AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_DESCRIPTION);
@@ -76,7 +79,8 @@ public class Constants {
 		allowedScalars.put(AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_SCOPE_Q);
 		allowedScalars.put(AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_LOCALONLY);
 		allowedScalars.put(AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_NOTIFICATION_TRIGGER);
-
+		allowedScalars.put(AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_PICK);
+		allowedScalars.put(AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, NGSIConstants.NGSI_LD_OMIT);
 		allowedScalars.put(AppConstants.ENTITY_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_HAS_OBJECT);
 		allowedScalars.put(AppConstants.ENTITY_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_HAS_OBJECT_LIST);
 		allowedScalars.put(AppConstants.ENTITY_CREATE_PAYLOAD, NGSIConstants.NGSI_LD_OBJECT_TYPE);

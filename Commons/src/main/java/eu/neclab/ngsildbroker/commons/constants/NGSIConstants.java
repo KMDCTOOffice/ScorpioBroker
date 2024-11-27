@@ -25,6 +25,7 @@ public interface NGSIConstants {
 	public final static String GEO_TYPE_LINESTRING = "LineString";
 	public final static String GEO_TYPE_MULTI_LINESTRING = "MultiLineString";
 	public final static String GEO_TYPE_MULTI_POLYGON = "MultiPolygon";
+	public final static String GEO_TYPE_MULTI_POINT = "MultiPoint";
 
 	public final static String TIME_REL_BEFORE = "before";
 	public final static String TIME_REL_AFTER = "after";
@@ -51,6 +52,7 @@ public interface NGSIConstants {
 	public final static String JSON_LD_NONE = "@none";
 	public final static String JSON_LD_CONTEXT = "@context";
 	public final static String JSON_LD_LANGUAGE = "@language";
+	public final static String JSON_LD_JSON = "@json";
 	public final static String NGSI_LD_DEFAULT_PREFIX = "https://uri.etsi.org/ngsi-ld/default-context/";
 	public final static String NGSI_LD_RELATIONSHIP = "https://uri.etsi.org/ngsi-ld/Relationship";
 
@@ -59,16 +61,15 @@ public interface NGSIConstants {
 	public final static String NGSI_LD_HAS_OBJECT = "https://uri.etsi.org/ngsi-ld/hasObject";
 	public final static String NGSI_LD_PROPERTY = "https://uri.etsi.org/ngsi-ld/Property";
 	public final static String NGSI_LD_HAS_VALUE = "https://uri.etsi.org/ngsi-ld/hasValue";
- 	public final static String NGSI_LD_OBJECT_TYPE = "https://uri.etsi.org/ngsi-ld/hasObjectType";
+	public final static String NGSI_LD_OBJECT_TYPE = "https://uri.etsi.org/ngsi-ld/hasObjectType";
 	public final static String NGSI_LD_COORDINATES = "https://purl.org/geojson/vocab#coordinates"; // "https://uri.etsi.org/ngsi-ld/coordinates";
 	public final static String NGSI_LD_GEOPROPERTY = "https://uri.etsi.org/ngsi-ld/GeoProperty";
 	public final static String NGSI_LD_LANGPROPERTY = "https://uri.etsi.org/ngsi-ld/LanguageProperty";
-	public final static String NGSI_LD_HAS_JSON ="https://uri.etsi.org/ngsi-ld/hasJSON";
-	public final static String NGSI_LD_JSON_PROPERTY="https://uri.etsi.org/ngsi-ld/JsonProperty";
+	public final static String NGSI_LD_HAS_JSON = "https://uri.etsi.org/ngsi-ld/hasJSON";
+	public final static String NGSI_LD_JSON_PROPERTY = "https://uri.etsi.org/ngsi-ld/JsonProperty";
 	public static final String JSON = "json";
-	public final static String JSONPROPERTY="JsonProperty";
-	public static final String PREVIOUS_JSON = "previousJson";
-
+	public final static String JSONPROPERTY = "JsonProperty";
+	public static final String PREVIOUS_JSON = "https://uri.etsi.org/ngsi-ld/hasPreviousJson";
 
 	public final static String NGSI_LD_GEOPROPERTY_SHORT = "GeoProperty";
 	public final static String NGSI_LD_LOCATION = "https://uri.etsi.org/ngsi-ld/location";
@@ -112,8 +113,11 @@ public interface NGSIConstants {
 	public final static String NGSI_LD_TIMESTAMP_START = "https://uri.etsi.org/ngsi-ld/startAt";
 	public final static String NGSI_LD_TIMESTAMP_END = "https://uri.etsi.org/ngsi-ld/endAt";
 	public final static String NGSI_LD_POLYGON = "https://purl.org/geojson/vocab#Polygon";
+	public final static String NGSI_LD_MULTI_POLYGON = "https://purl.org/geojson/vocab#MultiPolygon";
 	public final static String NGSI_LD_POINT = "https://purl.org/geojson/vocab#Point";
+	public final static String NGSI_LD_MULTI_POINT = "https://purl.org/geojson/vocab#MultiPoint";
 	public final static String NGSI_LD_LINESTRING = "https://purl.org/geojson/vocab#LineString";
+	public final static String NGSI_LD_MULTI_LINESTRING = "https://purl.org/geojson/vocab#MultiLineString";
 	public final static String NGSI_LD_SUBSCRIPTION_ID = "https://uri.etsi.org/ngsi-ld/subscriptionId";
 	public final static String NGSI_LD_NOTIFIED_AT = "https://uri.etsi.org/ngsi-ld/notifiedAt";
 	public final static String NGSI_LD_DATA = "https://uri.etsi.org/ngsi-ld/data";
@@ -168,10 +172,11 @@ public interface NGSIConstants {
 	public final static String LISTPROPERTY = "ListProperty";
 	public final static String VOCABPROPERTY = "VocabProperty";
 	public final static String PROVIDED_BY = "providedBy";
+	public final static String NGSI_LD_PROVIDED_BY = "https://uri.etsi.org/ngsi-ld/default-context/providedBy";
 	public final static String NGSI_LD_SYS_ATTRS = "https://uri.etsi.org/ngsi-ld/sysAttrs";
 	public final static String NGSI_LD_LOCALONLY = "https://uri.etsi.org/ngsi-ld/localOnly";
 
-	public final static String NGSI_LD_STAR ="https://uri.etsi.org/ngsi-ld/default-context/*";
+	public final static String NGSI_LD_STAR = "https://uri.etsi.org/ngsi-ld/default-context/*";
 	public final static String LOCALONLY = "LocalOnly";
 	// IMPORTANT! DO NOT MESS UP THIS ORDER!!! ONLY APPEND ON THE END NEW STUFF
 	public final static String[] NGSI_LD_PAYLOAD_KEYS = { JSON_LD_ID, JSON_LD_TYPE, JSON_LD_CONTEXT,
@@ -184,14 +189,14 @@ public interface NGSIConstants {
 			NGSI_LD_DESCRIPTION, NGSI_LD_GEO_REL, NGSI_LD_TIME_STAMP, NGSI_LD_TIMESTAMP_START, NGSI_LD_TIMESTAMP_END,
 			NGSI_LD_SUBSCRIPTION_ID, NGSI_LD_NOTIFIED_AT, NGSI_LD_DATA, NGSI_LD_INTERNAL, NGSI_LD_LAST_NOTIFICATION,
 			NGSI_LD_LAST_FAILURE, NGSI_LD_LAST_SUCCESS, NGSI_LD_TIMES_SENT, NGSI_LD_UNIT_CODE, NGSI_LD_DATA_SET_ID,
-			NGSI_LD_MANAGEMENTINTERVAL, NGSI_LD_HAS_VOCAB ,NGSI_LD_HAS_LIST,NGSI_LD_HAS_JSON};
+			NGSI_LD_MANAGEMENTINTERVAL, NGSI_LD_HAS_VOCAB, NGSI_LD_HAS_LIST, NGSI_LD_HAS_JSON };
 
 	public final static String[] NGSI_LD_SUBSCRIPTON_PAYLOAD_KEYS = { JSON_LD_ID, JSON_LD_TYPE, JSON_LD_CONTEXT,
 			NGSI_LD_ENTITIES, NGSI_LD_ID_PATTERN, NGSI_LD_GEO_QUERY, NGSI_LD_NOTIFICATION, NGSI_LD_ATTRIBUTES,
 			NGSI_LD_ENDPOINT, NGSI_LD_ACCEPT, NGSI_LD_URI, NGSI_LD_FORMAT, NGSI_LD_QUERY, NGSI_LD_WATCHED_ATTRIBUTES,
 			NGSI_LD_TIMES_SENT, NGSI_LD_THROTTLING, NGSI_LD_TIME_INTERVAL, NGSI_LD_EXPIRES, NGSI_LD_STATUS,
 			NGSI_LD_DESCRIPTION, NGSI_LD_IS_ACTIVE, NGSI_LD_TIMESTAMP_END, NGSI_LD_TIMESTAMP_START,
-			NGSI_LD_SUBSCRIPTION_NAME, NGSI_LD_HAS_VOCAB, NGSI_LD_HAS_LIST,NGSI_LD_HAS_JSON };
+			NGSI_LD_SUBSCRIPTION_NAME, NGSI_LD_HAS_VOCAB, NGSI_LD_HAS_LIST, NGSI_LD_HAS_JSON };
 
 	public final static String GEO_JSON_COORDINATES = "coordinates";
 	public final static String GEO_JSON_TYPE = "type";
@@ -294,17 +299,20 @@ public interface NGSIConstants {
 	public static final Integer[] VALID_QOS = { 0, 1, 2 };
 	public static final String COUNT_HEADER_RESULT = "NGSILD-Results-Count";
 	public static final Set<String> NGSI_LD_ATTR_TYPES = Sets.newHashSet(NGSI_LD_PROPERTY, NGSI_LD_RELATIONSHIP,
-			NGSI_LD_GEOPROPERTY, NGSI_LD_LANGPROPERTY, NGSI_LD_VocabProperty,NGSI_LD_ListProperty,NGSI_LD_LOCALONLY,NGSI_LD_JSON_PROPERTY);
+			NGSI_LD_GEOPROPERTY, NGSI_LD_LANGPROPERTY, NGSI_LD_VocabProperty, NGSI_LD_ListProperty, NGSI_LD_LOCALONLY,
+			NGSI_LD_JSON_PROPERTY);
 
 	public final static String NOTIFICATION = "Notification";
 
 	public static final String LINK_HEADER = "Link";
 	public static final String QUERY_TYPE = "Query";
+	public static final String ENTITY_MAP_TYPE = "EntityMap";
 	public static final String ISACTIVE_FALSE = "paused";
 	public static final String ISACTIVE_TRUE = "active";
 	public final static String LIST = "list";
-
+	public static final String CURRENT_CORE_CONTEXT = "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.8.jsonld";
 	public static final Set<String> CORE_CONTEXT_URLS = Sets.newHashSet(
+			"https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.8.jsonld",
 			"https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.7.jsonld",
 			"https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.6.jsonld",
 			"https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.5.jsonld",
@@ -347,6 +355,10 @@ public interface NGSIConstants {
 	public static final String NGSI_LD_SCOPE_Q = "https://uri.etsi.org/ngsi-ld/scopeQ";
 
 	public static final String ERROR_TYPE = "type";
+	public static final String LAST_USAGE = "lastUsage";
+	public static final String NUMBER_OF_HITS = "numberOfHits";
+	public static final String LOCAL_ID = "localId";
+	public static final String EXPIRES_AT = "expiresAt";
 	public static final String ERROR_TITLE = "title";
 	public static final String ERROR_DETAIL_MESSAGE = "message";
 	public static final String ERROR_DETAIL_ENDPOINT = "endpoint";
@@ -364,10 +376,13 @@ public interface NGSIConstants {
 	public static final String ERROR_CODE = "errorCode";
 	public static final String NGSI_LD_TYPES_ENDPOINT = "/ngsi-ld/v1/types";
 	public static final String NGSI_LD_ENTITIES_ENDPOINT = "/ngsi-ld/v1/entities";
+	public static final String NGSI_LD_ENTITY_MAP_ENDPOINT = "/ngsi-ld/v1/entityMap";
 	public static final String ENDPOINT_BATCH_CREATE = "/ngsi-ld/v1/entityOperations/create";
 	public static final String ENDPOINT_BATCH_UPSERT = "/ngsi-ld/v1/entityOperations/upsert";
 	public static final String ENDPOINT_BATCH_DELETE = "/ngsi-ld/v1/entityOperations/delete";
 	public static final String ENDPOINT_BATCH_UPDATE = "/ngsi-ld/v1/entityOperations/update";
+	public static final String ENDPOINT_BATCH_QUERY = "/ngsi-ld/v1/entityOperations/query";
+	public static final String ENDPOINT_BATCH_MERGE = "/ngsi-ld/v1/entityOperations/merge";
 	public static final String NGSI_LD_TEMPORAL_ENTITIES_ENDPOINT = "/ngsi-ld/v1/temporal/entities";
 	public static final String ENDPOINT_TEMPORAL_BATCH_DELETE = "/ngsi-ld/v1/temporal/entityOperations/delete";
 	public static final String ENDPOINT_TEMPORAL_CREATE_DELETE = "/ngsi-ld/v1/temporal/entityOperations/create";
@@ -393,11 +408,11 @@ public interface NGSIConstants {
 	public static final String NGSI_LD_HAS_LANGUAGE_MAP = "https://uri.etsi.org/ngsi-ld/hasLanguageMap";
 	public static final String ID = "id";
 	public static final String KIND = "kind";
-	public static final String CACHED = "cached";
-	public static final String IMPLICITLYCREATED = "implicitlycreated";
-	public static final String HOSTED = "hosted";
-	public static final String CREATEDAT = "createdat";
-	public static final String URL = "url";
+	public static final String CACHED = "Cached";
+	public static final String IMPLICITLYCREATED = "ImplicitlyCreated";
+	public static final String HOSTED = "Hosted";
+	public static final String CREATEDAT = "createdAt";
+	public static final String URL = "URL";
 	public static final String JSONLD_CONTEXTS = "ngsi-ld/v1/jsonldContexts/";
 	public static final String JSONLD_CONTEXT = "jsonldContext";
 	public static final String NGSI_LD_ATTRIBUTES_ENDPOINT = "/ngsi-ld/v1/attributes";
@@ -412,13 +427,13 @@ public interface NGSIConstants {
 	public final static String QUERY_PARAMETER_CONCISE_VALUE = "concise";
 	public final static String QUERY_PARAMETER_CONCISE = "option";
 	public static final String SCOPE = "scope";
-	public static final String PREVIOUS_VALUE = "previousValue";
-	public static final String PREVIOUS_VOCAB = "previousVocab";
+	public static final String PREVIOUS_VALUE = "https://uri.etsi.org/ngsi-ld/hasPreviousValue";
+	public static final String PREVIOUS_VOCAB = "https://uri.etsi.org/ngsi-ld/hasPreviousVocab";
 
-	public static final String PREVIOUS_VALUE_LIST = "previousValueList";
-	public static final String PREVIOUS_OJBECT_LIST = "previousObjectList";
-	public static final String PREVIOUS_LANGUAGE_MAP = "previousLanguageMap";
-	public static final String PREVIOUS_OBJECT = "previousObject";
+	public static final String PREVIOUS_VALUE_LIST = "https://uri.etsi.org/ngsi-ld/hasPreviousValueList";
+	public static final String PREVIOUS_OJBECT_LIST = "https://uri.etsi.org/ngsi-ld/hasPreviousObjectList";
+	public static final String PREVIOUS_LANGUAGE_MAP = "https://uri.etsi.org/ngsi-ld/hasPreviousLanguageMap";
+	public static final String PREVIOUS_OBJECT = "https://uri.etsi.org/ngsi-ld/hasPreviousObject";
 	public static final String NGSI_LD_REG_MODE = "https://uri.etsi.org/ngsi-ld/mode";
 	public static final String NGSI_LD_REG_MODE_AUX = "auxiliary";
 	public static final String NGSI_LD_REG_MODE_INC = "inclusive";
@@ -465,7 +480,11 @@ public interface NGSIConstants {
 	public static final String NGSI_LD_REG_OPERATION_RETRIEVESUBSCRIPTION = "retrieveSubscription";
 	public static final String NGSI_LD_REG_OPERATION_QUERYSUBSCRIPTION = "querySubscription";
 	public static final String NGSI_LD_REG_OPERATION_DELETESUBSCRIPTION = "deleteSubscription";
-	public static final String NGSI_LD_REG_OPERATION_ENTITYMAP = "entityMap";
+	public static final String NGSI_LD_REG_OPERATION_QUERY_ENTITYMAP = "queryEntityMap";
+	public static final String NGSI_LD_REG_OPERATION_CREATE_ENTITYMAP = "createEntityMap";
+	public static final String NGSI_LD_REG_OPERATION_UPDATE_ENTITYMAP = "updateEntityMap";
+	public static final String NGSI_LD_REG_OPERATION_DELETE_ENTITYMAP = "deleteEntityMap";
+	public static final String NGSI_LD_REG_OPERATION_RETRIEVE_ENTITYMAP = "retrieveEntityMap";
 	public static final String NGSI_LD_REG_OPERATION_CANCOMPRESS = "canCompress";
 	public static final String ENTITY_MAP_TOKEN_HEADER = "NGSILD-EntityMap";
 
@@ -476,6 +495,8 @@ public interface NGSIConstants {
 	public static final String LANGUAGE_MAP = "languageMap";
 	public static final Set<String> ENTITY_BASE_PROPS = Sets.newHashSet(JSON_LD_ID, JSON_LD_TYPE, NGSI_LD_CREATED_AT,
 			NGSI_LD_MODIFIED_AT, NGSI_LD_SCOPE);
+	public static final Set<String> ENTITY_BASE_PROPS_SHORT = Sets.newHashSet(ID, TYPE, QUERY_PARAMETER_CREATED_AT,
+			QUERY_PARAMETER_MODIFIED_AT, SCOPE);
 	public final static String NGSI_LD_HAS_KEY = "https://uri.etsi.org/ngsi-ld/hasKey";
 	public final static String KEY = "key";
 	public static final String OBJECT_TYPE = "objectType";
@@ -496,4 +517,36 @@ public interface NGSIConstants {
 			NGSI_LD_NOTIFICATION_TRIGGER_ENTITY_CREATED, NGSI_LD_NOTIFICATION_TRIGGER_ENTITY_UPDATED,
 			NGSI_LD_NOTIFICATION_TRIGGER_ENTITY_DELETED, NGSI_LD_NOTIFICATION_TRIGGER_ATTRIBUTE_CREATED,
 			NGSI_LD_NOTIFICATION_TRIGGER_ATTRIBUTE_UPDATED, NGSI_LD_NOTIFICATION_TRIGGER_ATTRIBUTE_DELETED);
+
+	public static final String QUERY_PARAMETER_JOIN = "join";
+	public static final String QUERY_PARAMETER_JOINLEVEL = "joinLevel";
+	public static final String QUERY_PARAMETER_ENTITY_DIST = "entityDist";
+	public static final String NGSI_LD_ENTITY_MAP_SHORT = "entityMap";
+	public static final String NGSI_LD_ENTITY = "https://uri.etsi.org/ngsi-ld/entity";
+
+	public static final String JSON_LD_NULL = "@null";
+	public static final String QUERY_PARAMETER_OMIT = "omit";
+	public static final String QUERY_PARAMETER_PICK = "pick";
+	public static final String NGSI_LD_REGISTRY_SUB_ENDPOINT = "/ngsi-ld/v1/csourceSubscriptions";
+	public static final String NGSI_LD_REGISTRY_ENDPOINT = "/ngsi-ld/v1/csourceRegistrations";
+	public static final String NGSI_LD_SUB_ENDPOINT = "/ngsi-ld/v1/subscriptions";
+	public static final String ENTITY_MAP_COMPACTED_ENTRY = "entityMap";
+	public static final String LINKED_MAP_COMPACTED_ENTRY = "linkedMaps";
+
+	public static final String CONTEXT_SOURCE_INFO = "contextSourceInfo";
+	public static final String SUBSCRIPTION_NEWLY_MATCHING = "newlyMatching";
+	public static final String SUBSCRIPTION_UPDATED_MATCHING = "updated";
+	public static final String SUBSCRIPTION_NO_LONGER_MATCHING = "noLongerMatching";
+	public static final String NGSI_LD_PICK = "https://uri.etsi.org/ngsi-ld/pick";
+	public static final String NGSI_LD_OMIT = "https://uri.etsi.org/ngsi-ld/omit";
+	public static final String NGSI_LD_JSON_KEYS = "https://uri.etsi.org/ngsi-ld/jsonKeys";
+	public static final String QUERY_PARAMETER_DO_NOT_COMPACT = "doNotCompact";
+	public static final String NGSI_LD_NOTIFICATION_TRIGGER_SHORT = "notificationTrigger";
+	public static final String NGSI_LD_DATA_SET_ID_SHORT = "datasetId";
+	public static final String NGSI_LD_NOTIFICATION_SHORT = "notification";
+	public static final String NGSI_LD_FORMAT_SHORT = "format";
+	public static final String NGSI_LD_SHOWCHANGES_SHORT = "showChanges";
+	public static final String NGSI_LD_ENDPOINT_SHORT = "endpoint";
+	public static final String NGSI_LD_URI_SHORT = "uri";
+
 }

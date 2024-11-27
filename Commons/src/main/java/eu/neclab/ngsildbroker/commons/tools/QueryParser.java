@@ -12,8 +12,7 @@ import java.util.Map;
 import java.util.PrimitiveIterator.OfInt;
 import java.util.Set;
 import java.util.Stack;
-import java.util.regex.Pattern;
-
+import eu.neclab.ngsildbroker.commons.datatypes.terms.DataSetIdTerm;
 import org.apache.commons.lang3.StringUtils;
 
 import com.github.jsonldjava.core.Context;
@@ -25,6 +24,7 @@ import eu.neclab.ngsildbroker.commons.datatypes.terms.AttrsQueryTerm;
 import eu.neclab.ngsildbroker.commons.datatypes.terms.CSFQueryTerm;
 import eu.neclab.ngsildbroker.commons.datatypes.terms.GeoQueryTerm;
 import eu.neclab.ngsildbroker.commons.datatypes.terms.LanguageQueryTerm;
+import eu.neclab.ngsildbroker.commons.datatypes.terms.ProjectionTerm;
 import eu.neclab.ngsildbroker.commons.datatypes.terms.QQueryTerm;
 import eu.neclab.ngsildbroker.commons.datatypes.terms.ScopeQueryTerm;
 import eu.neclab.ngsildbroker.commons.datatypes.terms.TemporalQueryTerm;
@@ -82,11 +82,12 @@ public class QueryParser {
 	private static String queryTerm = "(" + queryTermCompare + ")|(" + queryTermEqual + ")|(" + queryTermUnequal + ")|("
 			+ queryTermPattern + ")|(" + queryTermNotPattern + ")";
 	private static String queryTermAssoc = "\\((" + queryTerm + "((" + logicalOp + ")(" + queryTerm + "))*)\\)";
+	@SuppressWarnings("unused")
 	private static String query = "((" + queryTerm + ")|(" + queryTermAssoc + "))" + "((" + logicalOp + ")(("
 			+ queryTerm + ")|(" + queryTermAssoc + ")))*";
-	@SuppressWarnings("unused")
+
 	// TODO validate queries still not working ... rework regex ???
-	private static Pattern p = Pattern.compile(query);
+	// private static Pattern p = Pattern.compile(query);
 
 	public static CSFQueryTerm parseCSFQuery(String input, Context context) throws ResponseException {
 		return null;
@@ -100,11 +101,14 @@ public class QueryParser {
 		QQueryTerm current = root;
 		boolean readingAttrib = true;
 		boolean readingOperant = false;
+		boolean readingLinkedQ = false;
 		String attribName = "";
 		StringBuilder operator = new StringBuilder();
 		String operant = "";
 		input = URLDecoder.decode(input, StandardCharsets.UTF_8);
 		OfInt it = input.chars().iterator();
+		int currentJoinLevel = 0;
+		Tuple2<String, Set<String>> joinTuple;
 		while (it.hasNext()) {
 			char b = (char) it.next().intValue();
 			if (b == '(') {
@@ -113,7 +117,6 @@ public class QueryParser {
 				current = child;
 				readingAttrib = true;
 				readingOperant = false;
-
 			} else if (b == ';') {
 				QQueryTerm next = new QQueryTerm(context);
 				current.setOperant(operant);
@@ -161,7 +164,14 @@ public class QueryParser {
 				readingAttrib = true;
 				readingOperant = false;
 				operant = "";
-
+			} else if (b == '}') {
+				current.setAttribute(attribName);
+				attribName = "";
+				current = current.getParent();
+				readingAttrib = true;
+				readingOperant = false;
+				currentJoinLevel--;
+				readingLinkedQ = false;
 			} else if ((b == '!' || b == '=' || b == '<' || b == '>' || b == '~') && !readingOperant) {
 				operator.append(b);
 				readingAttrib = false;
@@ -170,7 +180,33 @@ public class QueryParser {
 					root.addAttrib(attribName);
 					attribName = "";
 				}
+			} else if (b == '{') {
+				currentJoinLevel++;
+				root.setHasLinkedQ(true);
+				current.setLinkedQ(true);
+				current.setLinkedAttrName(attribName);
+				root.addJoinLevel2AttribAndTypes(currentJoinLevel, attribName, null);
+				QQueryTerm child = new QQueryTerm(context);
+				current.setFirstChild(child);
+				current = child;
+				readingAttrib = true;
+				readingOperant = false;
+				readingLinkedQ = true;
+				attribName = "";
+
 			} else {
+				if (readingLinkedQ) {
+					if (b == ':' || b == ',') {
+						current.getParent().addLinkedEntityType(attribName);
+						attribName = "";
+						if (b == ':') {
+							root.addJoinLevel2AttribAndTypes(currentJoinLevel, current.getParent().getLinkedAttrName(),
+									current.getParent().getLinkedEntityTypes());
+						}
+						continue;
+					}
+
+				}
 				if (readingAttrib) {
 					attribName += (char) b;
 				} else {
@@ -181,6 +217,7 @@ public class QueryParser {
 					readingOperant = true;
 					operant += (char) b;
 				}
+
 			}
 
 		}
@@ -210,20 +247,15 @@ public class QueryParser {
 			throw new ResponseException(ErrorType.BadRequestData, "geometry needs to be provided");
 		}
 		String[] temp = georel.split(";");
-		if(!List.of(NGSIConstants.GEO_REL_NEAR,
-				NGSIConstants.GEO_REL_WITHIN,
-				NGSIConstants.GEO_REL_CONTAINS,
-				NGSIConstants.GEO_REL_DISJOINT,
-				NGSIConstants.GEO_REL_INTERSECTS,
-				NGSIConstants.GEO_REL_EQUALS,
-				NGSIConstants.GEO_REL_OVERLAPS)
-				.contains(temp[0])){
+		if (!List.of(NGSIConstants.GEO_REL_NEAR, NGSIConstants.GEO_REL_WITHIN, NGSIConstants.GEO_REL_CONTAINS,
+				NGSIConstants.GEO_REL_DISJOINT, NGSIConstants.GEO_REL_INTERSECTS, NGSIConstants.GEO_REL_EQUALS,
+				NGSIConstants.GEO_REL_OVERLAPS).contains(temp[0])) {
 			throw new ResponseException(ErrorType.BadRequestData, "georel is invalid");
 		}
 		GeoQueryTerm result = new GeoQueryTerm(context);
 		result.setGeorel(temp[0]);
 		if (temp[0].equals(NGSIConstants.GEO_REL_NEAR)) {
-			if (temp.length < 2) {
+			if (temp.length < 2 || !temp[1].contains("==")) {
 				throw new ResponseException(ErrorType.BadRequestData, "Georelation is not valid");
 			}
 			String[] maxMin = temp[1].split("==");
@@ -242,13 +274,14 @@ public class QueryParser {
 		if (attrs == null || attrs.isEmpty()) {
 			return null;
 		}
+		attrs = attrs.replaceAll("[\"\\n\\s]", "");
 		AttrsQueryTerm result = new AttrsQueryTerm(context);
 		for (String attr : attrs.split(",")) {
 			result.addAttr(attr);
 		}
-		if(result.getCompactedAttrs().contains(NGSIConstants.ID)
-				|| result.getCompactedAttrs().contains(NGSIConstants.TYPE)){
-				throw new ResponseException(ErrorType.BadRequestData);
+		if (result.getCompactedAttrs().contains(NGSIConstants.ID)
+				|| result.getCompactedAttrs().contains(NGSIConstants.TYPE)) {
+			throw new ResponseException(ErrorType.BadRequestData);
 		}
 		return result;
 	}
@@ -258,6 +291,7 @@ public class QueryParser {
 			return null;
 		}
 		ScopeQueryTerm result = new ScopeQueryTerm();
+		result.setScopeQueryString(queryString);
 		ScopeQueryTerm current = result;
 		StringBuilder scopeLevel = new StringBuilder();
 		ArrayList<String> scopeLevels = new ArrayList<String>();
@@ -315,8 +349,8 @@ public class QueryParser {
 		if (!scopeLevels.isEmpty() && current != null) {
 			current.setScopeLevels(scopeLevels.toArray(new String[0]));
 		}
-		if(current != null && current.getScopeLevels()==null){
-			throw new ResponseException(ErrorType.BadRequestData,"Bad scope query");
+		if (current != null && current.getScopeLevels() == null) {
+			throw new ResponseException(ErrorType.BadRequestData, "Bad scope query");
 		}
 		return result;
 	}
@@ -344,7 +378,7 @@ public class QueryParser {
 			} else if (b == ';') {
 				TypeQueryTerm next = new TypeQueryTerm(context);
 				current.setType(type.toString());
-				allTypes.add(type.toString());
+				allTypes.add(current.getType());
 				current.setNext(next);
 				current.setNextAnd(true);
 				current = next;
@@ -353,7 +387,7 @@ public class QueryParser {
 			} else if (b == '|' || b == ',') {
 				TypeQueryTerm next = new TypeQueryTerm(context);
 				current.setType(type.toString());
-				allTypes.add(type.toString());
+				allTypes.add(current.getType());
 				current.setNext(next);
 				current.setNextAnd(false);
 				current = next;
@@ -361,7 +395,7 @@ public class QueryParser {
 
 			} else if (b == ')') {
 				current.setType(type.toString());
-				allTypes.add(type.toString());
+				allTypes.add(current.getType());
 				current = current.getParent();
 				type.setLength(0);
 
@@ -514,20 +548,20 @@ public class QueryParser {
 
 		StringBuilder keyBuilder = new StringBuilder();
 		for (char c : input.toCharArray()) {
-			if (c == '{') {
+			if (c == '{' || c == '.') {
 				String key = keyBuilder.toString();
 				Map<String, Object> childMap = new HashMap<>();
 				stack.peek().put(key, childMap);
 				stack.push(childMap);
 				keyBuilder.setLength(0);
 			} else if (c == '}') {
-				if (keyBuilder.length() > 0) {
+				if (!keyBuilder.isEmpty()) {
 					stack.peek().put(keyBuilder.toString(), null);
 					keyBuilder.setLength(0);
 				}
 				stack.pop();
 			} else if (c == ',') {
-				if (keyBuilder.length() > 0) {
+				if (!keyBuilder.isEmpty()) {
 					stack.peek().put(keyBuilder.toString(), null);
 					keyBuilder.setLength(0);
 				}
@@ -535,10 +569,68 @@ public class QueryParser {
 				keyBuilder.append(c);
 			}
 		}
-		if(resultMap.isEmpty()){
-			return Map.of(input,new HashMap<>());
+
+		if (resultMap.isEmpty()) {
+			return Map.of(input, new HashMap<>());
+
 		}
 		return resultMap;
+	}
+
+	public static DataSetIdTerm parseDataSetId(String ids) throws ResponseException {
+		if (ids == null || ids.isEmpty()) {
+			return null;
+		}
+		ids = ids.replace("\"", "");
+		Set<String> idsList = Sets.newHashSet(ids.split(","));
+		DataSetIdTerm result = new DataSetIdTerm();
+		result.setIds(idsList);
+		return result;
+	}
+
+	public static void parseProjectionTerm(ProjectionTerm projectionTerm, String input, Context context)
+			throws ResponseException {
+		if (input == null) {
+			return;
+		}
+		ProjectionTerm root = projectionTerm;
+		ProjectionTerm current = root;
+		StringBuilder attribName = new StringBuilder();
+		input = URLDecoder.decode(input, StandardCharsets.UTF_8).trim();
+		String expanded;
+		OfInt it = input.chars().iterator();
+		while (it.hasNext()) {
+			char b = (char) it.next().intValue();
+			if (b == '{') {
+				ProjectionTerm child = current.createNewChild();
+				expanded = context.expandIri(attribName.toString(), false, true, null, null);
+				current.setAttrib(expanded);
+				current.setHasLinked(true);
+				root.setHasAnyLinked(true);
+				attribName.setLength(0);
+				current = child;
+			} else if (b == ',' || b == '|') {
+				ProjectionTerm next = current.createNewNext();
+				expanded = context.expandIri(attribName.toString(), false, true, null, null);
+				current.setAttrib(expanded);
+				attribName.setLength(0);
+				current = next;
+			} else if (b == '}') {
+				if (attribName.length() > 0) {
+					expanded = context.expandIri(attribName.toString(), false, true, null, null);
+					current.setAttrib(expanded);
+				}
+				attribName.setLength(0);
+				current = current.getParent();
+			} else {
+				attribName.append(b);
+			}
+
+		}
+		if (attribName.length() > 0) {
+			expanded = context.expandIri(attribName.toString(), false, true, null, null);
+			current.setAttrib(expanded);
+		}
 	}
 
 }

@@ -29,7 +29,7 @@ import eu.neclab.ngsildbroker.commons.exceptions.ResponseException;
 import eu.neclab.ngsildbroker.entityhandler.services.EntityService;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
-import io.quarkus.test.junit.mockito.InjectMock;
+import io.quarkus.test.junit.mockito.MockitoConfig;
 import io.restassured.RestAssured;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
@@ -46,7 +46,7 @@ public class EntityBatchControllerTest {
 	private String deletePayload;
 	private String BadRequestDeletePayload;
 
-	@InjectMock
+	@MockitoConfig
 	EntityService entityService;
 
 	@BeforeEach
@@ -124,7 +124,7 @@ public class EntityBatchControllerTest {
 		opResult.addSuccess(new CRUDSuccess(null, null, null, Sets.newHashSet()));
 		NGSILDOperationResultList.add(opResult);
 
-		Mockito.when(entityService.createBatch(any(), any(), any(), anyBoolean()))
+		Mockito.when(entityService.createBatch(any(), any(), any(), anyBoolean(), any()))
 				.thenReturn(Uni.createFrom().item(NGSILDOperationResultList));
 
 		try {
@@ -152,7 +152,7 @@ public class EntityBatchControllerTest {
 
 		try {
 
-			Mockito.when(entityService.createEntity(any(), any(), any())).thenReturn(Uni.createFrom()
+			Mockito.when(entityService.createEntity(any(), any(), any(), any())).thenReturn(Uni.createFrom()
 					.item(new NGSILDOperationResult(AppConstants.CREATE_REQUEST, "urn:test:testentity1")));
 
 			ExtractableResponse<Response> response = RestAssured.given().body(badRequestPayload)
@@ -183,7 +183,7 @@ public class EntityBatchControllerTest {
 		opResult.setWasUpdated(true);
 		NGSILDOperationResultList.add(opResult);
 
-		Mockito.when(entityService.appendBatch(any(), any(), any(), anyBoolean(),anyBoolean()))
+		Mockito.when(entityService.appendBatch(any(), any(), any(), anyBoolean(),anyBoolean(), any()))
 				.thenReturn(Uni.createFrom().item(NGSILDOperationResultList));
 
 		try {
@@ -239,7 +239,7 @@ public class EntityBatchControllerTest {
 		opResult.setWasUpdated(true);
 		NGSILDOperationResultList.add(opResult);
 
-		Mockito.when(entityService.upsertBatch(any(), any(), any(), anyBoolean(), anyBoolean()))
+		Mockito.when(entityService.upsertBatch(any(), any(), any(), anyBoolean(), anyBoolean(), any()))
 				.thenReturn(Uni.createFrom().item(NGSILDOperationResultList));
 
 		try {
@@ -294,7 +294,7 @@ public class EntityBatchControllerTest {
 		opResult.setWasUpdated(true);
 		NGSILDOperationResultList.add(opResult);
 
-		Mockito.when(entityService.deleteBatch(any(), any(), anyBoolean()))
+		Mockito.when(entityService.deleteBatch(any(), any(), anyBoolean(), any()))
 				.thenReturn(Uni.createFrom().item(NGSILDOperationResultList));
 
 		try {
@@ -328,7 +328,7 @@ public class EntityBatchControllerTest {
 			opResult.addFailure(new ResponseException(ErrorType.InvalidRequest, ""));
 			NGSILDOperationResultList.add(opResult);
 
-			Mockito.when(entityService.deleteBatch(any(), any(), anyBoolean()))
+			Mockito.when(entityService.deleteBatch(any(), any(), anyBoolean(), any()))
 					.thenReturn(Uni.createFrom().item(NGSILDOperationResultList));
 
 			ExtractableResponse<Response> response = RestAssured.given().body(BadRequestDeletePayload)

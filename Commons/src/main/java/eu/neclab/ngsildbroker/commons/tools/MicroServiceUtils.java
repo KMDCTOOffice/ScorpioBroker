@@ -7,16 +7,21 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import eu.neclab.ngsildbroker.commons.constants.AppConstants;
 import eu.neclab.ngsildbroker.commons.datatypes.requests.BaseRequest;
-import eu.neclab.ngsildbroker.commons.datatypes.requests.BatchRequest;
-import eu.neclab.ngsildbroker.commons.datatypes.requests.DeleteAttributeRequest;
 import eu.neclab.ngsildbroker.commons.datatypes.requests.subscription.SubscriptionRequest;
+import eu.neclab.ngsildbroker.commons.enums.ErrorType;
+import eu.neclab.ngsildbroker.commons.exceptions.ResponseException;
 import io.vertx.core.http.impl.headers.HeadersMultiMap;
+import io.vertx.pgclient.PgException;
+
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.smallrye.reactive.messaging.MutinyEmitter;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Singleton;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -27,9 +32,13 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CoderResult;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Base64.Encoder;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.zip.DeflaterOutputStream;
 
 @Singleton
 public class MicroServiceUtils {
@@ -42,6 +51,8 @@ public class MicroServiceUtils {
 	int port;
 	@ConfigProperty(name = "atcontext.url", defaultValue = "http://localhost:9090/ngsi-ld/v1/jsonldContexts/")
 	String contextServerUrl;
+
+	private static final Encoder base64Encoder = Base64.getEncoder();
 
 	@PostConstruct
 	void setup() {
@@ -56,29 +67,379 @@ public class MicroServiceUtils {
 		}
 	}
 
-	public static void serializeAndSplitObjectAndEmit(Object obj, int messageSize, MutinyEmitter<String> emitter,
-			ObjectMapper objectMapper) {
-		String data;
-		try {
-			data = objectMapper.writeValueAsString(obj);
-		} catch (JsonProcessingException e) {
-			logger.error("Failed to serialize object", e);
-			return;
+	public static void putIntoIdMap(Map<String, List<Map<String, Object>>> localEntities, String id,
+			Map<String, Object> local) {
+		List<Map<String, Object>> tmp = localEntities.get(id);
+		if (tmp == null) {
+			tmp = Lists.newArrayList();
+			localEntities.put(id, tmp);
 		}
-		int size = data.getBytes().length;
+		tmp.add(local);
+	}
 
-		List<String> result;
-		int id = data.hashCode();
-		if (size <= messageSize) {
-			result = new ArrayList<>(1);
-			result.add(data);
+	public static void serializeAndSplitObjectAndEmit(Object obj, int maxMessageSize, MutinyEmitter<String> emitter,
+			ObjectMapper objectMapper) throws ResponseException {
+		if (obj instanceof BaseRequest br) {
+			String base;
+			try {
+				base = objectMapper.writeValueAsString(br);
+			} catch (JsonProcessingException e) {
+				logger.error("Failed to serialize object", e);
+				throw new ResponseException(ErrorType.InternalError, "Failed to serialize object");
+			}
+			logger.debug("attempting to send request with max message size " + maxMessageSize);
+			base = base.substring(0, base.length() - 1);
+			base += ",\"" + AppConstants.PAYLOAD_SERIALIZATION_CHAR + "\":[";
+			String current = base;
+			Map<String, List<Map<String, Object>>> payload = br.getPayload();
+			Map<String, List<Map<String, Object>>> prevPayload = br.getPrevPayload();
+			boolean zip = br.isZipped();
+			List<String> toSend = Lists.newArrayList();
+			if (payload != null) {
+				boolean first = true;
+				int lastSend = 0;
+				for (Entry<String, List<Map<String, Object>>> entry : payload.entrySet()) {
+					String serializedPayload;
+					String serializedPrevpayload;
+					String id = entry.getKey();
+					for (int i = 0; i < entry.getValue().size(); i++) {
+						try {
+							serializedPayload = objectMapper.writeValueAsString(entry.getValue().get(i));
+						} catch (JsonProcessingException e) {
+							logger.error("Failed to serialize object", e);
+							throw new ResponseException(ErrorType.InternalError, "Failed to serialize object");
+						}
+						if (prevPayload != null) {
+							List<Map<String, Object>> prev = prevPayload.get(id);
+							if (prev != null) {
+								if (i < prev.size()) {
+									Map<String, Object> prevValue = prev.get(i);
+									try {
+										serializedPrevpayload = objectMapper.writeValueAsString(prevValue);
+									} catch (JsonProcessingException e) {
+										logger.error("Failed to serialize object", e);
+										throw new ResponseException(ErrorType.InternalError,
+												"Failed to serialize object");
+									}
+								} else {
+									serializedPrevpayload = "null";
+								}
+							} else {
+								serializedPrevpayload = "null";
+							}
+						} else {
+							serializedPrevpayload = "null";
+						}
+
+						if (zip) {
+
+							try {
+								serializedPayload = base64Encoder.encodeToString(zip(serializedPayload));
+							} catch (IOException e) {
+								throw new ResponseException(ErrorType.InternalError, "Failed to compress prevpayload");
+							}
+							try {
+								serializedPrevpayload = base64Encoder.encodeToString(zip(serializedPrevpayload));
+							} catch (IOException e) {
+								throw new ResponseException(ErrorType.InternalError, "Failed to compress prevpayload");
+							}
+						}
+						int messageLength = current.getBytes().length + id.getBytes().length
+								+ serializedPayload.getBytes().length + serializedPrevpayload.getBytes().length + 18;
+						logger.debug("message size after adding payload would be " + messageLength);
+						if (messageLength > maxMessageSize) {
+							if (first) {
+								throw new ResponseException(ErrorType.RequestEntityTooLarge);
+							}
+							logger.debug("finalizing message");
+							current = current.substring(0, current.length() - 1) + "]}";
+							logger.debug("finale messagesize: " + current.getBytes().length);
+							if (current.getBytes().length > maxMessageSize) {
+								logger.error("ALERT MESSAGE TO BIG");
+							}
+
+							toSend.add(current);
+							current = base + "\"" + id + "\",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPrevpayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+							first = true;
+						} else if (messageLength == maxMessageSize) {
+							logger.debug("finalizing message");
+							current += "\"" + id + "\",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPrevpayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += "]}";
+							logger.debug("finale messagesize: " + current.getBytes().length);
+							if (current.getBytes().length > maxMessageSize) {
+								logger.error("ALERT MESSAGE TO BIG");
+							}
+							toSend.add(current);
+							current = base;
+							first = true;
+						} else {
+							current += "\"" + id + "\",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPrevpayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+						}
+					}
+					first = false;
+				}
+				if (current.length() != base.length()) {
+					logger.debug("finalizing message");
+					current = current.substring(0, current.length() - 1) + "]}";
+					logger.debug("finale messagesize: " + current.getBytes().length);
+					if (current.getBytes().length > maxMessageSize) {
+						logger.error("ALERT MESSAGE TO BIG");
+					}
+					toSend.add(current);
+					current = base;
+				}
+			} else if (prevPayload != null) {
+				boolean first = true;
+				for (Entry<String, List<Map<String, Object>>> entry : prevPayload.entrySet()) {
+					String serializedPayload = "null";
+					String serializedPrevpayload;
+					String id = entry.getKey();
+					for (Map<String, Object> mapEntry : entry.getValue()) {
+						try {
+							serializedPrevpayload = objectMapper.writeValueAsString(mapEntry);
+						} catch (JsonProcessingException e) {
+							logger.error("Failed to serialize object", e);
+							throw new ResponseException(ErrorType.InternalError, "Failed to serialize object");
+						}
+
+						if (zip) {
+
+							try {
+								serializedPayload = base64Encoder.encodeToString(zip(serializedPayload));
+							} catch (IOException e) {
+								throw new ResponseException(ErrorType.InternalError, "Failed to compress prevpayload");
+							}
+							try {
+								serializedPrevpayload = base64Encoder.encodeToString(zip(serializedPrevpayload));
+							} catch (IOException e) {
+								throw new ResponseException(ErrorType.InternalError, "Failed to compress prevpayload");
+							}
+						}
+						int messageLength = current.getBytes().length + id.getBytes().length
+								+ serializedPayload.getBytes().length + serializedPrevpayload.getBytes().length + 18;
+						logger.debug("message size after adding payload would be " + maxMessageSize);
+						if (messageLength > maxMessageSize) {
+							if (first) {
+								throw new ResponseException(ErrorType.RequestEntityTooLarge);
+							}
+							logger.debug("finalizing message only prevpayload");
+							current = current.substring(0, current.length() - 1) + "]}";
+							logger.debug("finale messagesize only prevpayload: " + current.getBytes().length);
+							toSend.add(current);
+							current = base + "\"" + id + "\",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPrevpayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+							first = true;
+						} else if (messageLength == maxMessageSize) {
+							logger.debug("finalizing message only prevpayload");
+							current = current.substring(0, current.length() - 1) + "]}";
+							logger.debug("finale messagesize only prevpayload: " + current.getBytes().length);
+							toSend.add(current);
+							current = base;
+							first = true;
+						} else {
+							current += "\"" + id + "\",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+							if (zip) {
+								current += "\"";
+							}
+							current += serializedPrevpayload;
+							if (zip) {
+								current += "\"";
+							}
+							current += ",";
+						}
+					}
+					first = false;
+				}
+				if (current.length() != base.length()) {
+					logger.debug("finalizing message only prevpayload");
+					current = current.substring(0, current.length() - 1) + "]}";
+					logger.debug("finale messagesize only prevpayload: " + current.getBytes().length);
+					toSend.add(current);
+					current = base;
+				}
+			} else if (br.getIds() != null) {
+				boolean first = true;
+				for (String entry : br.getIds()) {
+					String serializedPayload = "null";
+					String serializedPrevpayload = "null";
+					String id = entry;
+
+					if (zip) {
+
+						try {
+							serializedPayload = base64Encoder.encodeToString(zip(serializedPayload));
+						} catch (IOException e) {
+							throw new ResponseException(ErrorType.InternalError, "Failed to compress prevpayload");
+						}
+						try {
+							serializedPrevpayload = base64Encoder.encodeToString(zip(serializedPrevpayload));
+						} catch (IOException e) {
+							throw new ResponseException(ErrorType.InternalError, "Failed to compress prevpayload");
+						}
+					}
+					int messageLength = current.getBytes().length + id.getBytes().length
+							+ serializedPayload.getBytes().length + serializedPrevpayload.getBytes().length + 18;
+					logger.debug("message size after adding payload would be " + maxMessageSize);
+					if (messageLength > maxMessageSize) {
+						if (first) {
+							throw new ResponseException(ErrorType.RequestEntityTooLarge);
+						}
+						logger.debug("finalizing message only ids");
+						current = current.substring(0, current.length() - 1) + "]}";
+						logger.debug("finale messagesize only ids: " + current.getBytes().length);
+						toSend.add(current);
+						current = base + "\"" + id + "\",";
+						if (zip) {
+							current += "\"";
+						}
+						current += serializedPayload;
+						if (zip) {
+							current += "\"";
+						}
+						current += ",";
+						if (zip) {
+							current += "\"";
+						}
+						current += serializedPrevpayload;
+						if (zip) {
+							current += "\"";
+						}
+						current += ",";
+						first = true;
+					} else if (messageLength == maxMessageSize) {
+						logger.debug("finalizing message only ids");
+						current = current.substring(0, current.length() - 1) + "]}";
+						logger.debug("finale messagesize only ids: " + current.getBytes().length);
+						toSend.add(current);
+						current = base;
+						first = true;
+					} else {
+						current += "\"" + id + "\",";
+						if (zip) {
+							current += "\"";
+						}
+						current += serializedPayload;
+						if (zip) {
+							current += "\"";
+						}
+						current += ",";
+						if (zip) {
+							current += "\"";
+						}
+						current += serializedPrevpayload;
+						if (zip) {
+							current += "\"";
+						}
+						current += ",";
+					}
+					first = false;
+				}
+				if (current.length() != base.length()) {
+					logger.debug("finalizing message only ids");
+					current = current.substring(0, current.length() - 1) + "]}";
+					logger.debug("finale messagesize only ids: " + current.getBytes().length);
+					toSend.add(current);
+					current = base;
+				}
+			} else {
+				throw new ResponseException(ErrorType.InternalError, "Failed to compress prevpayload");
+			}
+			toSend.forEach(entry -> {
+				logger.debug("sending entry of size: " + entry.getBytes().length);
+				emitter.sendAndForget(entry);
+			});
+
 		} else {
-			int messageSizeToUse = messageSize - 32;
-			result = splitStringByByteLength(data, messageSizeToUse);
+			String data;
+			try {
+				data = objectMapper.writeValueAsString(obj);
+			} catch (JsonProcessingException e) {
+				throw new ResponseException(ErrorType.InternalError, "Failed to serialize object");
+			}
+			emitter.sendAndForget(data);
 		}
-		for (String message : result) {
-			emitter.sendAndForget(message);
-		}
+
+	}
+
+	private static byte[] zip(String data) throws IOException {
+		ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+		DeflaterOutputStream deflateOut = new DeflaterOutputStream(byteArrayOutputStream);
+		deflateOut.write(data.getBytes());
+		deflateOut.flush();
+		deflateOut.close();
+		byte[] tmp = byteArrayOutputStream.toByteArray();
+		byteArrayOutputStream.close();
+		return tmp;
 	}
 
 	public static List<String> splitStringByByteLength(String src, int maxsize) {
@@ -131,48 +492,20 @@ public class MicroServiceUtils {
 		}
 	}
 
-	public static BaseRequest deepCopyRequestMessage(BaseRequest originalPayload) {
-		BaseRequest result;
-		switch (originalPayload.getRequestType()) {
-		case AppConstants.DELETE_ATTRIBUTE_REQUEST:
-			result = new DeleteAttributeRequest();
-			result.setPreviousEntity(originalPayload.getPreviousEntity());
-			result.setAttribName(originalPayload.getAttribName());
-			result.setDatasetId(originalPayload.getDatasetId());
-			result.setDeleteAll(originalPayload.isDeleteAll());
-			break;
-		default:
-			result = new BaseRequest();
-
-		}
-		result.setId(originalPayload.getId());
-		result.setPayload(deepCopyMap(originalPayload.getPayload()));
-		result.setTenant(originalPayload.getTenant());
-		result.setRequestType(originalPayload.getRequestType());
-		Object previous = originalPayload.getPreviousEntity();
-		if (previous instanceof Map m1) {
-			result.setPreviousEntity(deepCopyMap(m1));
-		}
-		if (previous instanceof List l1) {
-			result.setPreviousEntity(deppCopyList(l1));
-		}
-
+	public static Map<String, List<Map<String, Object>>> deepCopyIdMap(
+			Map<String, List<Map<String, Object>>> original) {
+		Map<String, List<Map<String, Object>>> result = new HashMap<>(original.size());
+		original.forEach((key, value) -> {
+			List<Map<String, Object>> tmp = new ArrayList<>(value.size());
+			value.forEach(map -> {
+				tmp.add(deepCopyMap(map));
+			});
+			result.put(key, tmp);
+		});
 		return result;
 	}
 
-	public static BatchRequest deepCopyRequestMessage(BatchRequest originalPayload) {
-		List<Map<String, Object>> copiedPayload = new ArrayList<>();
-		if (originalPayload.getRequestPayload() != null && !originalPayload.getRequestPayload().isEmpty()) {
-			for (Map<String, Object> entry : originalPayload.getRequestPayload()) {
-				copiedPayload.add(deepCopyMap(entry));
-			}
-		}
-		BatchRequest result = new BatchRequest(originalPayload.getTenant(), copiedPayload,
-				originalPayload.getContexts(), originalPayload.getRequestType());
-		result.setEntityIds(originalPayload.getEntityIds());
-		return result;
-	}
-
+	@SuppressWarnings("unchecked")
 	public static Map<String, Object> deepCopyMap(Map<String, Object> original) {
 		if (original == null) {
 			return null;
@@ -181,16 +514,18 @@ public class MicroServiceUtils {
 		for (Entry<String, Object> entry : original.entrySet()) {
 			Object copiedValue;
 			Object originalValue = entry.getValue();
-			if (originalValue instanceof List) {
-				copiedValue = deppCopyList((List<Object>) originalValue);
-			} else if (originalValue instanceof Map) {
-				copiedValue = deepCopyMap((Map<String, Object>) originalValue);
+			if (originalValue instanceof List<?> l) {
+				copiedValue = deppCopyList(l);
+			} else if (originalValue instanceof Map<?, ?> m) {
+				copiedValue = deepCopyMap((Map<String, Object>) m);
 			} else if (originalValue instanceof Integer) {
 				copiedValue = ((Integer) originalValue).intValue();
-			} else if (originalValue instanceof Double) {
-				copiedValue = ((Double) originalValue).doubleValue();
+			} else if (originalValue instanceof Long) {
+				copiedValue = ((Long) originalValue).longValue();
 			} else if (originalValue instanceof Float) {
 				copiedValue = ((Float) originalValue).floatValue();
+			} else if (originalValue instanceof Double) {
+				copiedValue = ((Double) originalValue).doubleValue();
 			} else if (originalValue instanceof Boolean) {
 				copiedValue = ((Boolean) originalValue).booleanValue();
 			} else if (originalValue == null) {
@@ -204,17 +539,18 @@ public class MicroServiceUtils {
 		return result;
 	}
 
-	private static List<Object> deppCopyList(List<Object> original) {
-		if (original == null) {
+	@SuppressWarnings("unchecked")
+	private static List<Object> deppCopyList(List<?> l) {
+		if (l == null) {
 			return null;
 		}
 		List<Object> result = Lists.newArrayList();
-		for (Object originalValue : original) {
+		for (Object originalValue : l) {
 			Object copiedValue;
-			if (originalValue instanceof List) {
-				copiedValue = deppCopyList((List<Object>) originalValue);
-			} else if (originalValue instanceof Map) {
-				copiedValue = deepCopyMap((Map<String, Object>) originalValue);
+			if (originalValue instanceof List<?> l1) {
+				copiedValue = deppCopyList(l1);
+			} else if (originalValue instanceof Map<?,?> m) {
+				copiedValue = deepCopyMap((Map<String, Object>) m);
 			} else if (originalValue instanceof Integer) {
 				copiedValue = ((Integer) originalValue).intValue();
 			} else if (originalValue instanceof Double) {
@@ -271,5 +607,22 @@ public class MicroServiceUtils {
 			throw new RuntimeException(e);
 		}
 
+	}
+
+	public static void logPGE(PgException pge, Logger logger) {
+		logger.debug(pge.getSqlState());
+		logger.debug(pge.getDetail());
+		logger.debug(pge.getErrorMessage());
+		logger.debug(pge.getErrorCode() + "");
+		logger.debug(pge.getDataType());
+		logger.debug(pge.getFile());
+		logger.debug(pge.getHint());
+		logger.debug(pge.getInternalPosition());
+		logger.debug(pge.getInternalQuery());
+		logger.debug(pge.getPosition());
+		logger.debug(pge.getWhere());
+		logger.debug(pge.getTable());
+		logger.debug(pge.getRoutine());
+		
 	}
 }

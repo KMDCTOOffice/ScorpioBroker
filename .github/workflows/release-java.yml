@@ -35,7 +35,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-java-with-kafka
         run: |
-          mvn clean package -DskipTests -Dkafka -Pkafka -Ddocker -Ddocker-tag=java-kafka-${{steps.get-id.outputs.id}} -Dos=java -Dquarkus.profile=kafka
+          find . -name "pom.xml" -exec sed -i 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Pkafka -Dkafka -Ddocker -Ddocker-tag=java-kafka-${{steps.get-id.outputs.id}} -Dquarkus.profile=kafka
       - name: docker tag 
         run: |
           docker tag scorpiobroker/at-context-server:java-kafka-${{steps.get-id.outputs.id}} scorpiobroker/at-context-server:java-kafka-latest
@@ -67,7 +68,7 @@ jobs:
           docker tag scorpiobroker/all-in-one-runner:java-kafka-${{steps.get-id.outputs.id}} ${{ steps.login-ecr.outputs.registry }}/scorpiobroker/all-in-one-runner:java-kafka-${{steps.get-id.outputs.id}}
       - name: start docker aaio 
         run: |
-          docker-compose -f ./compose-files/docker-compose-java-aaio-kafka-test.yml up &
+          docker compose -f ./compose-files/docker-compose-java-aaio-kafka-test.yml up &
           sleep 120
       - name: newman action
         uses: matt-ball/newman-action@master
@@ -75,10 +76,10 @@ jobs:
           collection: api-test.json
           environment: api-test-aaio-environment.json
       - name: Stopping Scorpio 
-        run: docker-compose -f ./compose-files/docker-compose-java-aaio-kafka-test.yml down
+        run: docker compose -f ./compose-files/docker-compose-java-aaio-kafka-test.yml down
 #      - name: start docker dist 
 #        run: |
-#          docker-compose -f ./compose-files/docker-compose-java-dist-kafka-test.yml up &
+#          docker compose -f ./compose-files/docker-compose-java-dist-kafka-test.yml up &
 #          sleep 120
 #      - name: newman action
 #        uses: matt-ball/newman-action@master
@@ -86,7 +87,7 @@ jobs:
 #          collection: api-test.json
 #          environment: api-test-dist-environment.json
 #      - name: Stopping Scorpio 
-#        run: docker-compose -f ./compose-files/docker-compose-java-dist-kafka-test.yml down
+#        run: docker compose -f ./compose-files/docker-compose-java-dist-kafka-test.yml down
       - name: docker-login
         uses: docker/login-action@v2
         with:
@@ -281,7 +282,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-java-with-sqs
         run: |
-          mvn clean package -DskipTests -Dsqs -Psqs -Ddocker -Ddocker-tag=java-sqs-${{steps.get-id.outputs.id}} -Dos=java -Dquarkus.profile=sqs
+          find . -name "pom.xml" -exec sed -i 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Psqs -Dsqs -Ddocker -Ddocker-tag=java-sqs-${{steps.get-id.outputs.id}} -Dquarkus.profile=sqs
       - name: docker tag 
         run: |
           docker tag scorpiobroker/at-context-server:java-sqs-${{steps.get-id.outputs.id}} scorpiobroker/at-context-server:java-sqs-latest
@@ -505,7 +507,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-java-with-rabbitmq
         run: |
-          mvn clean package -DskipTests -Drabbitmq -Prabbitmq -Ddocker -Ddocker-tag=java-rabbitmq-${{steps.get-id.outputs.id}} -Dos=java -Dquarkus.profile=rabbitmq
+          find . -name "pom.xml" -exec sed -i 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Prabbitmq -Drabbitmq -Ddocker -Ddocker-tag=java-rabbitmq-${{steps.get-id.outputs.id}} -Dquarkus.profile=rabbitmq
       - name: docker tag 
         run: |
           docker tag scorpiobroker/at-context-server:java-rabbitmq-${{steps.get-id.outputs.id}} scorpiobroker/at-context-server:java-rabbitmq-latest
@@ -537,7 +540,7 @@ jobs:
           docker tag scorpiobroker/all-in-one-runner:java-rabbitmq-${{steps.get-id.outputs.id}} ${{ steps.login-ecr.outputs.registry }}/scorpiobroker/all-in-one-runner:java-rabbitmq-${{steps.get-id.outputs.id}}
       - name: start docker aaio 
         run: |
-          docker-compose -f ./compose-files/docker-compose-java-aaio-rabbitmq-test.yml up &
+          docker compose -f ./compose-files/docker-compose-java-aaio-rabbitmq-test.yml up &
           sleep 120
       - name: newman action
         uses: matt-ball/newman-action@master
@@ -545,10 +548,10 @@ jobs:
           collection: api-test.json
           environment: api-test-aaio-environment.json
       - name: Stopping Scorpio 
-        run: docker-compose -f ./compose-files/docker-compose-java-aaio-rabbitmq-test.yml down
+        run: docker compose -f ./compose-files/docker-compose-java-aaio-rabbitmq-test.yml down
 #      - name: start docker dist 
 #        run: |
-#          docker-compose -f ./compose-files/docker-compose-java-dist-rabbitmq-test.yml up &
+#          docker compose -f ./compose-files/docker-compose-java-dist-rabbitmq-test.yml up &
 #          sleep 120
 #      - name: newman action
 #        uses: matt-ball/newman-action@master
@@ -556,7 +559,7 @@ jobs:
 #          collection: api-test.json
 #          environment: api-test-dist-environment.json
 #      - name: Stopping Scorpio 
-#        run: docker-compose -f ./compose-files/docker-compose-java-dist-rabbitmq-test.yml down
+#        run: docker compose -f ./compose-files/docker-compose-java-dist-rabbitmq-test.yml down
       - name: docker-login
         uses: docker/login-action@v2
         with:
@@ -751,7 +754,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-java-with-mqtt
         run: |
-          mvn clean package -DskipTests -Dmqtt -Pmqtt -Ddocker -Ddocker-tag=java-mqtt-${{steps.get-id.outputs.id}} -Dos=java -Dquarkus.profile=mqtt
+          find . -name "pom.xml" -exec sed -i 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Pmqtt -Dmqtt -Ddocker -Ddocker-tag=java-mqtt-${{steps.get-id.outputs.id}} -Dquarkus.profile=mqtt
       - name: docker tag 
         run: |
           docker tag scorpiobroker/at-context-server:java-mqtt-${{steps.get-id.outputs.id}} scorpiobroker/at-context-server:java-mqtt-latest
@@ -783,7 +787,7 @@ jobs:
           docker tag scorpiobroker/all-in-one-runner:java-mqtt-${{steps.get-id.outputs.id}} ${{ steps.login-ecr.outputs.registry }}/scorpiobroker/all-in-one-runner:java-mqtt-${{steps.get-id.outputs.id}}
       - name: start docker aaio 
         run: |
-          docker-compose -f ./compose-files/docker-compose-java-aaio-mqtt-test.yml up &
+          docker compose -f ./compose-files/docker-compose-java-aaio-mqtt-test.yml up &
           sleep 120
 #      - name: newman action
 #        uses: matt-ball/newman-action@master
@@ -791,10 +795,10 @@ jobs:
 #          collection: api-test.json
 #          environment: api-test-aaio-environment.json
       - name: Stopping Scorpio 
-        run: docker-compose -f ./compose-files/docker-compose-java-aaio-mqtt-test.yml down
+        run: docker compose -f ./compose-files/docker-compose-java-aaio-mqtt-test.yml down
 #      - name: start docker dist 
 #        run: |
-#          docker-compose -f ./compose-files/docker-compose-java-dist-mqtt-test.yml up &
+#          docker compose -f ./compose-files/docker-compose-java-dist-mqtt-test.yml up &
 #          sleep 120
 #      - name: newman action
 #        uses: matt-ball/newman-action@master
@@ -802,7 +806,7 @@ jobs:
 #          collection: api-test.json
 #          environment: api-test-dist-environment.json
 #      - name: Stopping Scorpio 
-#        run: docker-compose -f ./compose-files/docker-compose-java-dist-mqtt-test.yml down
+#        run: docker compose -f ./compose-files/docker-compose-java-dist-mqtt-test.yml down
       - name: docker-login
         uses: docker/login-action@v2
         with:
@@ -998,7 +1002,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-java
         run: |
-          mvn clean package -DskipTests -Din-memory -Pin-memory -Ddocker -Ddocker-tag=java-${{steps.get-id.outputs.id}} -Dos=java -Dquarkus.profile=in-memory
+          find . -name "pom.xml" -exec sed -i 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Pin-memory -Din-memory -Ddocker -Ddocker-tag=java-${{steps.get-id.outputs.id}} -Dquarkus.profile=in-memory
       - name: docker tag
         run: |
           docker tag scorpiobroker/all-in-one-runner:java-${{steps.get-id.outputs.id}} scorpiobroker/all-in-one-runner:java-latest
@@ -1006,7 +1011,7 @@ jobs:
           docker tag scorpiobroker/all-in-one-runner:java-${{steps.get-id.outputs.id}} ${{ steps.login-ecr.outputs.registry }}/scorpiobroker/all-in-one-runner:java-${{steps.get-id.outputs.id}}
       - name: start docker aaio 
         run: |
-          docker-compose -f ./compose-files/docker-compose-java-aaio-test.yml up &
+          docker compose -f ./compose-files/docker-compose-java-aaio-test.yml up &
           sleep 120
       - name: newman action
         uses: matt-ball/newman-action@master
@@ -1014,7 +1019,7 @@ jobs:
           collection: api-test.json
           environment: api-test-aaio-environment.json
       - name: Stopping Scorpio 
-        run: docker-compose -f ./compose-files/docker-compose-java-aaio-test.yml down 
+        run: docker compose -f ./compose-files/docker-compose-java-aaio-test.yml down 
       - name: docker-login
         uses: docker/login-action@v2
         with:

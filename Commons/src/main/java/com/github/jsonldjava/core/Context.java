@@ -45,6 +45,8 @@ public class Context extends LinkedHashMap<String, Object> {
 
 	private boolean dontAddCoreContext;
 
+	private List<String> originalAtContext;
+
 	public Context() {
 		this(new JsonLdOptions());
 	}
@@ -340,11 +342,13 @@ public class Context extends LinkedHashMap<String, Object> {
 				result.createTermDefinition((Map<String, Object>) context, key, defined);
 			}
 		}
+		result.setOriginalAtContext(remoteContexts);
 		if (rds.isEmpty()) {
 			return Uni.createFrom().item(result);
 		} else {
 			Context finalResult = result;
-			return Uni.combine().all().unis(rds).combinedWith(list -> list).onItem().transformToUni(list -> {
+			return Uni.combine().all().unis(rds).with(list -> list).onItem().transformToUni(list -> {
+				
 				Uni<Context> resultUni = Uni.createFrom().item(finalResult);
 				for (Object obj : list) {
 					Tuple2<RemoteDocument, Object> tuple = (Tuple2<RemoteDocument, Object>) obj;
@@ -367,6 +371,16 @@ public class Context extends LinkedHashMap<String, Object> {
 			// 3.2.4
 
 		}
+	}
+
+	public void setOriginalAtContext(List<String> originalAtContext) {
+		this.originalAtContext = originalAtContext;
+	}
+	public List<String> getOriginalAtContext() {
+		if(originalAtContext.isEmpty()) {
+			return List.of(NGSIConstants.CURRENT_CORE_CONTEXT);
+		}
+		return originalAtContext;
 	}
 
 	public boolean dontAddCoreContext() {
@@ -651,7 +665,7 @@ public class Context extends LinkedHashMap<String, Object> {
 			}
 		}
 		// 4)
-		final int colIndex = value.indexOf(":");
+		final int colIndex = value.lastIndexOf(":");
 		if (colIndex >= 0) {
 			// 4.1)
 			final String prefix = value.substring(0, colIndex);
@@ -1297,8 +1311,8 @@ public class Context extends LinkedHashMap<String, Object> {
 //				ctx.put(term, defn);
 //			}
 			Object entry = termDefinitions.get(term);
-			if (entry instanceof Map) {
-				((Map) entry).remove(JsonLdConsts.REVERSE);
+			if (entry instanceof Map<?,?> m) {
+				m.remove(JsonLdConsts.REVERSE);
 			}
 			ctx.put(term, entry);
 		}

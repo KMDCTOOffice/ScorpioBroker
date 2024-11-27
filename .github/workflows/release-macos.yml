@@ -1,16 +1,17 @@
 name: Release macos version
+#on: [push,pull_request]
 on: 
   push:
     branches: "quarkus-release/**"
 jobs:
   build-macos-kafka:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v2     
       - name: Setup GraalVM
         uses: graalvm/setup-graalvm@v1
         with:
-          java-version: '17' # for a specific JDK 17; or '17' for the latest JDK 17
+          java-version: '21' # for a specific JDK 17; or '17' for the latest JDK 17
           distribution: 'graalvm'
       - name: Get release number
         id: get-id
@@ -25,7 +26,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-macos-with-kafka
         run: |
-          mvn clean package -DskipTests -Dkafka -Pkafka -Dnative -Dos=macos -Dquarkus.profile=kafka
+          find . -name "pom.xml" -exec sed -i '' 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Dmacos -Dkafka -Pkafka -Dnative -Dquarkus.native.container-build=false -Dquarkus.profile=kafka
       - name: Create Release ${{steps.get-id.outputs.id}}-macos-kafka
         id: create_release
         uses: actions/create-release@v1
@@ -43,7 +45,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-id.outputs.id}}-runner
           asset_name: scorpio-all-in-one-runner-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release at-context-server
@@ -52,7 +54,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./at-context-server/target/at-context-server-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./at-context-server/target/at-context-server-${{steps.get-id.outputs.id}}-runner
           asset_name: at-context-server-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release history-query-manager
@@ -61,7 +63,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-query-manager-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release history-entity-manager
@@ -70,7 +72,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-entity-manager-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release registry-subscription-manager
@@ -79,7 +81,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-subscription-manager-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release registry-manager 
@@ -88,7 +90,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-manager-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release subscription-manager 
@@ -97,7 +99,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: subscription-manager-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release query-manager 
@@ -106,7 +108,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./QueryManager/target/query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./QueryManager/target/query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: query-manager-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
       - name: Upload Release entity-manager
@@ -115,11 +117,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./EntityManager/target/entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./EntityManager/target/entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: entity-manager-macos-kafka-${{steps.get-id.outputs.id}}-macos-kafka
           asset_content_type: application/octet-stream
   build-macos-sqs:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v2     
       - name: Setup GraalVM
@@ -140,7 +142,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-macos-with-sqs
         run: |
-          mvn clean package -DskipTests -Dsqs -Psqs -Dnative -Dos=macos -Dquarkus.profile=sqs
+          find . -name "pom.xml" -exec sed -i '' 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Dmacos -Dsqs -Psqs -Dnative -Dquarkus.native.container-build=false -Dquarkus.profile=sqs
       - name: Create Release ${{steps.get-id.outputs.id}}-macos-sqs
         id: create_release
         uses: actions/create-release@v1
@@ -158,7 +161,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-id.outputs.id}}-runner
           asset_name: scorpio-all-in-one-runner-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release at-context-server
@@ -167,7 +170,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./at-context-server/target/at-context-server-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./at-context-server/target/at-context-server-${{steps.get-id.outputs.id}}-runner
           asset_name: at-context-server-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release history-query-manager
@@ -176,7 +179,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-query-manager-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release history-entity-manager
@@ -185,7 +188,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-entity-manager-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release registry-subscription-manager
@@ -194,7 +197,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-subscription-manager-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release registry-manager 
@@ -203,7 +206,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-manager-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release subscription-manager 
@@ -212,7 +215,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: subscription-manager-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release query-manager 
@@ -221,7 +224,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./QueryManager/target/query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./QueryManager/target/query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: query-manager-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
       - name: Upload Release entity-manager
@@ -230,11 +233,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./EntityManager/target/entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./EntityManager/target/entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: entity-manager-macos-sqs-${{steps.get-id.outputs.id}}-macos-sqs
           asset_content_type: application/octet-stream
   build-macos-mqtt:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v2     
       - name: Setup GraalVM
@@ -255,7 +258,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-macos-with-mqtt
         run: |
-          mvn clean package -DskipTests -Dmqtt -Pmqtt -Dnative -Dos=macos -Dquarkus.profile=mqtt
+          find . -name "pom.xml" -exec sed -i '' 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Dmacos -Dmqtt -Pmqtt -Dnative -Dquarkus.native.container-build=false -Dquarkus.profile=mqtt
       - name: Create Release ${{steps.get-id.outputs.id}}-macos-mqtt
         id: create_release
         uses: actions/create-release@v1
@@ -273,7 +277,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-id.outputs.id}}-runner
           asset_name: scorpio-all-in-one-runner-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release at-context-server
@@ -282,7 +286,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./at-context-server/target/at-context-server-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./at-context-server/target/at-context-server-${{steps.get-id.outputs.id}}-runner
           asset_name: at-context-server-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release history-query-manager
@@ -291,7 +295,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-query-manager-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release history-entity-manager
@@ -300,7 +304,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-entity-manager-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release registry-subscription-manager
@@ -309,7 +313,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-subscription-manager-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release registry-manager 
@@ -318,7 +322,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-manager-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release subscription-manager 
@@ -327,7 +331,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: subscription-manager-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release query-manager 
@@ -336,7 +340,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./QueryManager/target/query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./QueryManager/target/query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: query-manager-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
       - name: Upload Release entity-manager
@@ -345,11 +349,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./EntityManager/target/entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./EntityManager/target/entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: entity-manager-macos-mqtt-${{steps.get-id.outputs.id}}-macos-mqtt
           asset_content_type: application/octet-stream
   build-macos-rabbitmq:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v2     
       - name: Setup GraalVM
@@ -370,7 +374,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-macos-with-rabbitmq
         run: |
-          mvn clean package -DskipTests -Drabbitmq -Prabbitmq -Dnative -Dos=macos -Dquarkus.profile=rabbitmq
+          find . -name "pom.xml" -exec sed -i '' 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Dmacos -Drabbitmq -Prabbitmq -Dnative -Dquarkus.native.container-build=false -Dquarkus.profile=rabbitmq
       - name: Create Release ${{steps.get-id.outputs.id}}-macos-rabbitmq
         id: create_release
         uses: actions/create-release@v1
@@ -388,7 +393,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-id.outputs.id}}-runner
           asset_name: scorpio-all-in-one-runner-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release at-context-server
@@ -397,7 +402,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./at-context-server/target/at-context-server-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./at-context-server/target/at-context-server-${{steps.get-id.outputs.id}}-runner
           asset_name: at-context-server-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release history-query-manager
@@ -406,7 +411,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryQueryManager/target/history-query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-query-manager-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release history-entity-manager
@@ -415,7 +420,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./HistoryEntityManager/target/history-entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: history-entity-manager-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release registry-subscription-manager
@@ -424,7 +429,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistrySubscriptionManager/target/registry-subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-subscription-manager-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release registry-manager 
@@ -433,7 +438,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./RegistryManager/target/registry-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: registry-manager-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release subscription-manager 
@@ -442,7 +447,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./SubscriptionManager/target/subscription-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: subscription-manager-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release query-manager 
@@ -451,7 +456,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./QueryManager/target/query-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./QueryManager/target/query-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: query-manager-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
       - name: Upload Release entity-manager
@@ -460,11 +465,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./EntityManager/target/entity-manager-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: ./EntityManager/target/entity-manager-${{steps.get-id.outputs.id}}-runner
           asset_name: entity-manager-macos-rabbitmq-${{steps.get-id.outputs.id}}-macos-rabbitmq
           asset_content_type: application/octet-stream
   build-macos-aaio:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v2     
       - name: Setup GraalVM
@@ -485,7 +490,8 @@ jobs:
           echo "::set-output name=id::$id"
       - name: build-macos
         run: |
-          mvn clean package -DskipTests -Din-memory -Pin-memory -Dnative -Dos=macos -Dquarkus.profile=in-memory
+          find . -name "pom.xml" -exec sed -i '' 's/${{steps.get-id.outputs.id}}-SNAPSHOT/${{steps.get-id.outputs.id}}/g' {} +
+          mvn clean package -DskipTests -Dmacos -Din-memory -Pin-memory -Dnative -Dquarkus.native.container-build=false -Dquarkus.profile=in-memory
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -503,6 +509,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SUPER_SECRET }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-build-id.outputs.id}}-runner
+          asset_path: AllInOneRunner/target/all-in-one-runner-${{steps.get-id.outputs.id}}-runner
           asset_name: scorpio-all-in-one-runner-${{steps.get-id.outputs.id}}-macos
           asset_content_type: application/octet-stream

@@ -39,6 +39,10 @@ public class SubscriptionSyncSQS implements SyncService {
 	SubscriptionService subService;
 
 	Logger logger = LoggerFactory.getLogger(SubscriptionSyncSQS.class);
+	
+	
+	private long lastFailConnectTime = 0;
+	
 
 	private String seperator = "<&>";
 
@@ -55,13 +59,26 @@ public class SubscriptionSyncSQS implements SyncService {
 		pgSubscriber.channel("subscriptionchannel").handler(notice -> {
 			logger.debug("notice received: " + notice);
 			String[] noticeSplitted = notice.split(seperator);
-			int requestType = Integer.parseInt(noticeSplitted[2]);
+			//int requestType = Integer.parseInt(noticeSplitted[2]);
 			String syncId = noticeSplitted[3];
 			if (syncId.equals(SYNC_ID)) {
 				logger.debug("Discarding own announcement");
 			} else {
 				subService.reloadSubscription(noticeSplitted[1], noticeSplitted[0]);
 			}
+		});
+		
+		pgSubscriber.reconnectPolicy(retries -> {
+			long now = System.currentTimeMillis();
+			long reconnectTime;
+			if(lastFailConnectTime + (5000) < now) {
+				reconnectTime = 100;
+				
+			}else {
+				reconnectTime = 5000;
+			}
+			lastFailConnectTime = now;
+			return reconnectTime;
 		});
 		pgSubscriber.connect().await().indefinitely();
 	}

@@ -1,18 +1,24 @@
 package eu.neclab.ngsildbroker.subscriptionmanager.controller;
 
+import com.fasterxml.jackson.core.JsonGenerationException;
 import com.github.jsonldjava.core.JsonLDService;
 import com.github.jsonldjava.core.JsonLdConsts;
+import com.github.jsonldjava.utils.JsonUtils;
+import com.google.common.net.HttpHeaders;
+
 import eu.neclab.ngsildbroker.commons.constants.AppConstants;
 import eu.neclab.ngsildbroker.commons.constants.NGSIConstants;
+import eu.neclab.ngsildbroker.commons.datatypes.ViaHeaders;
 import eu.neclab.ngsildbroker.commons.enums.ErrorType;
 import eu.neclab.ngsildbroker.commons.exceptions.ResponseException;
 import eu.neclab.ngsildbroker.commons.tools.HttpUtils;
+import eu.neclab.ngsildbroker.commons.tools.MicroServiceUtils;
 import eu.neclab.ngsildbroker.subscriptionmanager.service.SubscriptionService;
 import io.smallrye.mutiny.Uni;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.impl.headers.HeadersMultiMap;
+import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
-import jakarta.json.Json;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.PATCH;
@@ -22,9 +28,9 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.QueryParam;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.resteasy.reactive.RestResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,10 +38,14 @@ import java.util.Map;
 @Path("/ngsi-ld/v1/subscriptions")
 public class SubscriptionController {
 
-	private final static Logger logger = LoggerFactory.getLogger(SubscriptionController.class);
+	// private final static Logger logger =
+	// LoggerFactory.getLogger(SubscriptionController.class);
 
 	@Inject
 	SubscriptionService subService;
+
+	@Inject
+	MicroServiceUtils microServiceUtils;
 
 	@ConfigProperty(name = "ngsild.corecontext", defaultValue = "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld")
 	String coreContext;
@@ -48,32 +58,52 @@ public class SubscriptionController {
 	@Inject
 	JsonLDService ldService;
 
+	private String selfViaHeader;
+
+	@PostConstruct
+	public void setup() {
+		URI gateway = microServiceUtils.getGatewayURL();
+		this.selfViaHeader = gateway.getScheme().toUpperCase() + "/1.1 " + gateway.getAuthority();
+	}
+
+	@SuppressWarnings("unchecked")
 	@POST
 	public Uni<RestResponse<Object>> subscribe(HttpServerRequest request, Map<String, Object> map) {
-		try{
-			if(!map.containsKey(NGSIConstants.JSONLD_CONTEXT)){
+		try {
+			if (!map.containsKey(NGSIConstants.JSONLD_CONTEXT)) {
 				String contextLink;
 				if (request.getHeader(NGSIConstants.LINK_HEADER) != null) {
-					contextLink = request.getHeader(NGSIConstants.LINK_HEADER).split(";")[0].replace("<","").replace(">","");
+					contextLink = request.getHeader(NGSIConstants.LINK_HEADER).split(";")[0].replace("<", "")
+							.replace(">", "");
 				} else if (map.containsKey(JsonLdConsts.CONTEXT)) {
-					contextLink = ((List<String>) map.get(JsonLdConsts.CONTEXT)).get(0);
+					if (map.get(JsonLdConsts.CONTEXT) instanceof List<?>) {
+						contextLink = ((List<String>) map.get(JsonLdConsts.CONTEXT)).get(0);
+					} else {
+						contextLink = map.get(JsonLdConsts.CONTEXT).toString();
+					}
 				} else {
-					contextLink=coreContext;
+					contextLink = coreContext;
 				}
-				map.put(NGSIConstants.JSONLD_CONTEXT,contextLink);
+				map.put(NGSIConstants.JSONLD_CONTEXT, contextLink);
 			}
-		}catch(Exception e){
-			return Uni.createFrom().item(HttpUtils.handleControllerExceptions(new ResponseException(ErrorType.BadRequestData)));
+		} catch (Exception e) {
+			return Uni.createFrom()
+					.item(HttpUtils.handleControllerExceptions(new ResponseException(ErrorType.BadRequestData)));
 		}
 		HeadersMultiMap otherHead = new HeadersMultiMap();
-		if(request.headers().contains(NGSIConstants.TENANT_HEADER)){
-			otherHead.add(NGSIConstants.TENANT_HEADER,request.headers().get(NGSIConstants.TENANT_HEADER));
+		if (request.headers().contains(NGSIConstants.TENANT_HEADER)) {
+			otherHead.add(NGSIConstants.TENANT_HEADER, request.headers().get(NGSIConstants.TENANT_HEADER));
 		}
-		otherHead.add(NGSIConstants.LINK_HEADER,"<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\"".formatted(map.get(NGSIConstants.JSONLD_CONTEXT)));
+		
+		ViaHeaders viaHeaders = new ViaHeaders(request.headers().getAll(HttpHeaders.VIA), this.selfViaHeader);
+		otherHead.add(NGSIConstants.LINK_HEADER,
+				"<%s>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\""
+						.formatted(map.get(NGSIConstants.JSONLD_CONTEXT)));
 		return HttpUtils.expandBody(request, map, AppConstants.SUBSCRIPTION_CREATE_PAYLOAD, ldService).onItem()
 				.transformToUni(tuple -> {
 					return subService
-							.createSubscription(otherHead,HttpUtils.getTenant(request), tuple.getItem2(), tuple.getItem1())
+							.createSubscription(otherHead, HttpUtils.getTenant(request), tuple.getItem2(),
+									tuple.getItem1(), viaHeaders)
 							.onItem().transform(t -> HttpUtils.generateSubscriptionResult(t, tuple.getItem1()));
 				}).onFailure().recoverWithItem(HttpUtils::handleControllerExceptions);
 	}
@@ -103,7 +133,8 @@ public class SubscriptionController {
 			return subService.getAllSubscriptions(HttpUtils.getTenant(request), actualLimit, offset).onItem()
 					.transformToUni(subscriptions -> {
 						return HttpUtils.generateQueryResult(request, subscriptions, options, null, acceptHeader, false,
-								actualLimit, null, ctx, ldService,null,null);
+								actualLimit, null, ctx, ldService, false, microServiceUtils.getGatewayURL().toString(),
+								NGSIConstants.NGSI_LD_SUB_ENDPOINT);
 					});
 		}).onFailure().recoverWithItem(HttpUtils::handleControllerExceptions);
 
@@ -127,7 +158,7 @@ public class SubscriptionController {
 			return subService.getSubscription(HttpUtils.getTenant(request), subscriptionId).onItem()
 					.transformToUni(subscription -> {
 						return HttpUtils.generateEntityResult(contextHeader, context, acceptHeader, subscription, null,
-								options, null, ldService,null,null);
+								options, null, ldService, null, null);
 					});
 		}).onFailure().recoverWithItem(HttpUtils::handleControllerExceptions);
 	}
@@ -155,6 +186,7 @@ public class SubscriptionController {
 		} catch (Exception e) {
 			return Uni.createFrom().item(HttpUtils.handleControllerExceptions(e));
 		}
+		@SuppressWarnings("unchecked")
 		List<String> contexts = (List<String>) map.get("@context");
 		List<String> finalContexts = new ArrayList<>();
 		if (contexts != null) {
@@ -164,10 +196,12 @@ public class SubscriptionController {
 			}
 			map.put("@context", finalContexts);
 		}
+		ViaHeaders viaHeaders = new ViaHeaders(request.headers().getAll(HttpHeaders.VIA), this.selfViaHeader);
 		return HttpUtils.expandBody(request, map, AppConstants.SUBSCRIPTION_UPDATE_PAYLOAD, ldService).onItem()
 				.transformToUni(tuple -> {
 					return subService
-							.updateSubscription(HttpUtils.getTenant(request), id, tuple.getItem2(), tuple.getItem1())
+							.updateSubscription(HttpUtils.getTenant(request), id, tuple.getItem2(), tuple.getItem1(),
+									viaHeaders)
 							.onItem().transform(t -> HttpUtils.generateSubscriptionResult(t, tuple.getItem1()));
 				}).onFailure().recoverWithItem(HttpUtils::handleControllerExceptions);
 
